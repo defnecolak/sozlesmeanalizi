@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gizlilik • <%= appName %></title>
+  <meta name="description" content="<%= appName %> gizlilik politikası." />
+  <meta property="og:title" content="Gizlilik • <%= appName %>" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/gizlilik" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>Gizlilik Politikası</h1>
+      <p class="muted">Bu metin bilgilendirme amaçlıdır. Kamuya açık yayına çıkmadan önce kendi durumuna göre güncellemen gerekebilir.</p>
+
+      <h2>1) Hangi veriler işlenir?</h2>
+      <ul>
+        <li><strong>Yüklediğin sözleşme dosyası/metin:</strong> Analiz yapmak için işlenir.</li>
+        <li><strong>Teknik bilgiler:</strong> Kredi sistemini yönetmek için cihaz kimliği (çerez), kredi sayısı ve satın alma kayıtları gibi teknik veriler tutulabilir.</li>
+      </ul>
+
+      <h2>2) Sözleşme metni saklanıyor mu?</h2>
+      <p>
+        Uygulama sözleşme metnini <strong>kalıcı olarak saklamayı hedeflemez</strong>. Yüklediğin dosya analiz sırasında geçici olarak işlenir ve işlem bitince silinir.
+        Not: Tarayıcında görünen “Geçmiş” listesi, sadece bu cihazda kısa bir analiz özeti tutabilir.
+      </p>
+
+      <h2>3) Üçüncü taraflarla paylaşım</h2>
+      <p>
+        Uygulama, metin çıkarmak/rapor üretmek için yerel kütüphaneler kullanır. Harici bir “metin gönder, analiz et” servisi çağırmak zorunda değildir.
+        Ödeme alınıyorsa, ödeme işlemi seçilen ödeme sağlayıcısı (örn. iyzico) üzerinden yürür.
+      </p>
+
+      <h2>4) Güvenlik</h2>
+      <p>
+        Trafik ve API istekleri temel güvenlik önlemleri (oran sınırlama, güvenli başlıklar) ile korunur. Yine de internet kusursuz değildir.
+        Çok hassas sözleşmeleri yüklemeden önce riskini değerlendir.
+      </p>
+
+      <h2>5) İletişim</h2>
+      <% if (supportEmail) { %>
+        <p>Gizlilikle ilgili soru ve talepler için: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+      <% } else { %>
+        <p class="muted">SUPPORT_EMAIL tanımlı değil.</p>
+      <% } %>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/">← Ana Sayfa</a>
+      <a class="btn" href="/uygulama">Uygulama</a>
+    </div>
+  </div>
+</body>
+</html>

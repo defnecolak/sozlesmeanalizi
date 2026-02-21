@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>İade Politikası • <%= appName %></title>
+  <meta name="description" content="<%= appName %> iade politikası." />
+  <meta property="og:title" content="İade Politikası • <%= appName %>" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/iade" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>İade Politikası</h1>
+      <p class="muted">
+        Bu politika, dijital “kredi” modeli için genel bir çerçevedir. Ödeme sağlayıcınızın kuralları ve yerel mevzuat geçerlidir.
+      </p>
+
+      <h2>1) Kredi nedir?</h2>
+      <p>
+        Kredi, <strong><%= appName %></strong> içinde “analiz hakkı” gibi çalışan dijital bir kullanım hakkıdır. Fiziksel ürün değildir.
+      </p>
+
+      <h2>2) Genel yaklaşım</h2>
+      <ul>
+        <li><strong>Kullanılmamış kredi:</strong> Kullanılmamış paketlerde, makul bir süre içinde yapılan talepler değerlendirilebilir.</li>
+        <li><strong>Kısmen kullanılmış kredi:</strong> Paket kısmen kullanıldıysa iade kısmi veya istisnai olabilir.</li>
+        <li><strong>Kötüye kullanım:</strong> Otomasyon/kötüye kullanım tespitinde iade reddedilebilir ve erişim kısıtlanabilir.</li>
+      </ul>
+
+      <h2>3) İade nasıl yapılır?</h2>
+      <p>
+        İade/chargeback talepleri çoğunlukla ödeme sağlayıcısı paneli üzerinden yürür. İşlemi hızlandırmak için sipariş numaranızı paylaşın.
+      </p>
+
+      <h2>4) İletişim</h2>
+      <% if (supportEmail) { %>
+        <p>İade ile ilgili destek için: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+      <% } else { %>
+        <p class="muted">SUPPORT_EMAIL tanımlı değil.</p>
+      <% } %>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/">← Ana Sayfa</a>
+      <a class="btn" href="/fiyatlandirma">Fiyatlandırma</a>
+      <a class="btn" href="/uygulama">Uygulama</a>
+    </div>
+  </div>
+</body>
+</html>

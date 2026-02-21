@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sayfa Bulunamadı • <%= appName %></title>
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card hero">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>404 — Sayfa Bulunamadı</h1>
+      <p class="muted">Bu adres yok. Muhtemelen yanlış link veya eski bir sayfa.</p>
+
+      <div class="hero-actions">
+        <a class="btn primary" href="/">Ana Sayfa</a>
+        <a class="btn" href="/uygulama">Uygulama</a>
+        <a class="btn" href="/sss">SSS</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

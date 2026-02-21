@@ -1,0 +1,6 @@
+node_modules
+tmp_uploads
+tmp_ocr
+.env
+.DS_Store
+data

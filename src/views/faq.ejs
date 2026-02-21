@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SSS • <%= appName %></title>
+  <meta name="description" content="<%= appName %> sık sorulan sorular." />
+  <meta property="og:title" content="SSS • <%= appName %>" />
+  <meta property="og:description" content="Skor, veri, kredi, PDF ve daha fazlası." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/sss" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>SSS</h1>
+      <p class="muted">Kısa, net, imza öncesi kafa toparlayan cevaplar.</p>
+
+      <details class="faq">
+        <summary>Bu uygulama avukat yerine geçiyor mu?</summary>
+        <div class="muted">
+          Hayır. <strong>Hukuki tavsiye vermez.</strong> Metinde “risk sinyali” olabilecek kalıpları işaretler ve pazarlık için örnek cümle önerir.
+          Son karar için bir avukatla değerlendirmek en sağlıklısıdır.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Skor ne anlama geliyor?</summary>
+        <div class="muted">
+          Skor, tespit edilen risk türleri ve şiddetine göre hesaplanan yaklaşık bir <strong>risk endeksi</strong>.
+          “100” demek “imzalama” anlamına gelmez; “daha fazla madde pazarlık edilmeli / netleştirilmeli” demektir.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Metnimi saklıyor musunuz?</summary>
+        <div class="muted">
+          Dosya analiz için geçici olarak işlenir, işlem bitince silinir. Uygulamadaki “Geçmiş” listesi ise sadece tarayıcınızda (bu cihazda) kısa bir özet tutar.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Taranmış PDF (fotoğraf gibi) yüklersem ne olur?</summary>
+        <div class="muted">
+          Taranmış PDF’lerde metin çıkarmak zor olabilir. Bu durumda sonuç zayıf olabilir veya hiç metin çıkarılamayabilir.
+          Mümkünse metin seçilebilir PDF / DOCX tercih edin.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Kredi sistemi nasıl çalışıyor?</summary>
+        <div class="muted">
+          Kredi = 1 analiz hakkı. Ücretsiz deneme bittikten sonra her başarılı analiz 1 kredi düşürür.
+          Hesap açmadan kullanılabildiği için kredi takibi cihaz/çerez mantığıyla çalışır.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>Satın aldığım kredi kaybolursa?</summary>
+        <div class="muted">
+          Satın alma sırasında verilen <strong>kurtarma kodunu</strong> saklayın. Çerezler silinirse / cihaz değişirse bu kod ile krediyi geri bağlayabilirsiniz.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>PDF rapor ne içeriyor?</summary>
+        <div class="muted">
+          Risk özeti, risk kartları ve varsa pazarlık önerileri içerir. İsterseniz ek bölümde metin örneklerini de ekleyebilirsiniz.
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>İade var mı?</summary>
+        <div class="muted">
+          İade, ödeme sağlayıcısının kurallarına bağlıdır. Ayrıntılar için <a href="/iade">İade Politikası</a> sayfasına bakın.
+        </div>
+      </details>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/fiyatlandirma">Fiyatlandırma</a>
+      <a class="btn" href="/uygulama">Analize Git</a>
+      <a class="btn" href="/">Ana Sayfa</a>
+
+      <% if (supportEmail) { %>
+        <div class="muted small" style="margin-top:12px">Destek: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

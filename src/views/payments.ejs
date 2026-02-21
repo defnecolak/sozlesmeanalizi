@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= appName %> · Ödeme</title>
+  <meta name="description" content="Kredi satın al ve analiz limitini artır." />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <meta name="theme-color" content="#0b1020" />
+
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+  </script>
+
+  <link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+  <script nonce="<%= cspNonce %>">
+    window.__CSP_NONCE__ = <%- JSON.stringify(cspNonce) %>;
+    window.__PAY_PACKS__ = <%- JSON.stringify(packs || []) %>;
+    window.__PRESELECT_CREDITS__ = <%- JSON.stringify(preselectCredits || 0) %>;
+  </script>
+  <script src="/public/payments.js" defer></script>
+</head>
+<body>
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/uygulama">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir" title="Koyu/Açık tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="pagehead">
+      <div>
+        <h1>Kredi Satın Al</h1>
+        <div class="muted">Ödeme güvenliği için bu sayfa ayrı çalışır. Ödeme sonrası sekmeyi kapatıp uygulamaya dönebilirsin.</div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <div class="card">
+      <div class="grid3">
+        <label class="label">
+          Paket
+          <select id="payCredits" class="select"></select>
+          <div class="muted small" id="payPrice">—</div>
+        </label>
+
+        <label class="label">
+          E-posta (fiş/işlem için)
+          <input id="payEmail" class="input" type="email" autocomplete="email" placeholder="ornek@mail.com" />
+        </label>
+
+        <label class="label">
+          Ad Soyad (opsiyonel)
+          <input id="payFullName" class="input" type="text" autocomplete="name" placeholder="Ad Soyad" />
+        </label>
+      </div>
+
+      <div class="row">
+        <div class="muted small" id="payHint">"Ödemeyi Başlat" dedikten sonra güvenli ödeme formu aşağıda açılır.</div>
+        <div class="spacer"></div>
+        <button class="btn primary" id="btnStartPay" type="button">Ödemeyi Başlat</button>
+      </div>
+
+      <div id="restoreBox" class="restorebox hidden">
+        <div class="restorebox-title">Restore Token</div>
+        <div class="muted small">Ödeme sonrası kredi eklenmediyse bu kodu sakla. Uygulamada "Restore" alanına yapıştırabilirsin.</div>
+        <div class="restorebox-row">
+          <code id="restoreToken" class="restorebox-token">—</code>
+          <button class="btn" id="btnCopyRestore" type="button">Kopyala</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div id="checkout" class="checkout"></div>
+
+      <div class="muted small" style="margin-top:12px;">
+        Sorun olursa: <a href="/iletisim">iletişim</a>
+        <% if (supportEmail) { %>
+          (<%= supportEmail %>)
+        <% } %>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,4 @@
+Contact: mailto:${SUPPORT_EMAIL}
+Expires: 2030-12-31T23:59:59.000Z
+Preferred-Languages: tr, en
+Policy: ${APP_BASE_URL}/#guvenlik

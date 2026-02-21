@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>İletişim • <%= appName %></title>
+  <meta name="description" content="<%= appName %> destek ve iletişim." />
+  <meta property="og:title" content="İletişim • <%= appName %>" />
+  <meta property="og:description" content="Geri bildirim ve destek." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/iletisim" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>İletişim</h1>
+      <p class="muted">Bug raporu, geri bildirim, fiyatlandırma sorusu… Hepsi olur.</p>
+
+      <% if (supportEmail) { %>
+        <div class="warnbox">
+          <strong>Destek e-posta:</strong>
+          <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a>
+        </div>
+      <% } else { %>
+        <div class="warnbox">
+          <strong>Not:</strong> SUPPORT_EMAIL tanımlı değil. Yayına almadan önce .env içine ekle.
+        </div>
+      <% } %>
+
+      <h3>Bir şey gönderirken şunları eklemen işimi hızlandırır</h3>
+      <ul class="muted" style="margin:8px 0 0 18px">
+        <li>Hangi sözleşme türü seçiliydi? (ör. Düğün/Etkinlik)</li>
+        <li>Hata ekran görüntüsü</li>
+        <li>Dosya formatı (PDF/DOCX/TXT)</li>
+        <li>Skor çok yüksek/düşük geldiyse: hangi maddeyi “normal” görüyorsun?</li>
+      </ul>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/uygulama">Analize Git</a>
+      <a class="btn" href="/sss">SSS</a>
+      <a class="btn" href="/">Ana Sayfa</a>
+
+      <div class="muted small" style="margin-top:12px">
+        Bu uygulama hukuki tavsiye vermez. Kritik sözleşmelerde avukata danışın.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= appName %></title>
+  <meta name="description" content="Sözleşme dosyanızı yükleyin, risk sinyallerini görün, PDF rapor indirin." />
+  <meta property="og:title" content="<%= appName %>" />
+  <meta property="og:description" content="Sözleşme dosyanızı yükleyin, risk sinyallerini görün, pazarlık metni ve PDF rapor alın." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="canonical" href="<%= baseUrl %>/" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card hero">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+      <h1><%= appName %></h1>
+      <p class="muted">PDF/DOCX/TXT yükle → risk sinyallerini gör → pazarlık için revize şablonları al → PDF rapor indir.</p>
+
+      <div class="hero-grid">
+        <div class="hero-item">
+          <div class="hero-title">Hızlı</div>
+          <div class="muted">30 saniyede “Top 3 risk” özeti.</div>
+        </div>
+        <div class="hero-item">
+          <div class="hero-title">Aksiyon odaklı</div>
+          <div class="muted">Kırmızı çizgi + revize şablonları.</div>
+        </div>
+        <div class="hero-item">
+          <div class="hero-title">Rol farkı</div>
+          <div class="muted">Hizmet alan/veren vs. göre skor.</div>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <a class="btn primary" href="/uygulama">Analize Başla</a>
+        <a class="btn" href="/fiyatlandirma">Fiyatlandırma</a>
+        <a class="btn" href="/sss">SSS</a>
+        <a class="btn" href="/ornek-rapor">Örnek PDF Rapor</a>
+      </div>
+
+      <div class="muted small footer-links">
+        <a href="/fiyatlandirma">Fiyatlandırma</a> • <a href="/sss">SSS</a> • <a href="/iletisim">İletişim</a> • <a href="/sorumluluk">Sorumluluk Reddi</a> • <a href="/gizlilik">Gizlilik</a> • <a href="/kullanim-sartlari">Kullanım Şartları</a> • <a href="/iade">İade Politikası</a>
+      </div>
+
+      <% if (supportEmail) { %>
+        <div class="muted small" style="margin-top:10px">Destek: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

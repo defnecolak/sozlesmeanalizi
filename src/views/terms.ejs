@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kullanım Şartları • <%= appName %></title>
+  <meta name="description" content="<%= appName %> kullanım şartları." />
+  <meta property="og:title" content="Kullanım Şartları • <%= appName %>" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/kullanim-sartlari" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>Kullanım Şartları</h1>
+      <div class="muted small">
+        Bu metin genel bilgilendirme amaçlıdır. Yayına almadan önce kendi iş modelin ve bulunduğun ülkenin mevzuatı için profesyonel danışmanlık alman önerilir.
+      </div>
+
+      <div style="height:14px"></div>
+
+      <h2>1) Hizmetin amacı</h2>
+      <p>
+        <strong><%= appName %></strong>, yüklediğiniz sözleşme metnindeki belirli kalıpları "risk sinyali" olarak işaretleyen bir karar-destek aracıdır.
+        Çıktılar; sözleşmenin kesin olarak iyi/kötü, geçerli/geçersiz veya sizin için uygun/uygun değil olduğunu garanti etmez.
+      </p>
+
+      <h2>2) Hukuki danışmanlık değildir</h2>
+      <p>
+        Uygulama tarafından üretilen skorlar, açıklamalar, risk kartları, revize şablonları ve parasal etki etiketleri <strong>hukuki tavsiye değildir</strong>.
+        Nihai karar ve imza öncesi değerlendirme için bir avukata danışmanız gerekebilir.
+      </p>
+
+      <h2>3) Veri işleme ve gizlilik (özet)</h2>
+      <ul>
+        <li><strong>Geçici işlem:</strong> Yüklenen dosya analiz için işlenir, işlem bitince silinir.</li>
+        <li><strong>Geçmiş tarayıcıdadır:</strong> “Geçmiş” bölümü analiz özetini sadece bu cihazda tutabilir.</li>
+        <li><strong>Kredi/cihaz verisi:</strong> Kredi sistemi açıksa, analiz hakkını takip etmek için cihaz kimliği ve kredi sayısı gibi teknik kayıtlar tutulabilir.</li>
+      </ul>
+
+      <h2>4) Kullanım kuralları</h2>
+      <ul>
+        <li>Uygulamayı yasa dışı amaçlarla, başkalarının haklarını ihlal edecek şekilde veya kötüye kullanım/otomasyon ile aşırı yük oluşturacak biçimde kullanamazsınız.</li>
+        <li>Yüklediğiniz içerikten (sözleşme metni dâhil) siz sorumlusunuz; üçüncü kişilerin gizliliğini ihlal eden içerikleri yüklememelisiniz.</li>
+        <li>Uygulama çıktısını “kesin hüküm” gibi sunmamalı, yanıltıcı beyanlarda kullanmamalısınız.</li>
+      </ul>
+
+      <h2>5) Sınırlamalar ve sorumluluk</h2>
+      <p>
+        Uygulama; yanlış pozitif (risk varmış gibi işaretleme) veya yanlış negatif (riski kaçırma) üretebilir. Metin kalitesi düşükse (taranmış PDF, bozuk karakter vb.)
+        sonuçlar daha da sapabilir.
+      </p>
+      <p>
+        Yürürlükteki emredici hukuk kuralları saklı kalmak üzere; <%= appName %>, doğrudan/dolaylı zarar, kâr kaybı, itibar kaybı, veri kaybı gibi zararlardan
+        sorumlu tutulamaz.
+      </p>
+
+      <h2>6) Ücretlendirme ve kredi sistemi</h2>
+      <p>
+        Kredi sistemi açıksa, her başarılı analiz belirli sayıda krediyi tüketebilir. Ücretsiz deneme hakkı (varsa) tükendikten sonra analiz için kredi gerekebilir.
+        Kredi paketleri dijital bir hizmet hakkıdır.
+      </p>
+
+      <h2>7) İade/iptal</h2>
+      <p>
+        İade/iptal talepleri, ödeme sağlayıcısının süreçlerine tabidir. Ayrıntılar için “İade Politikası” sayfasına bakın.
+      </p>
+
+      <h2>8) Değişiklikler</h2>
+      <p>
+        Bu şartlar zaman zaman güncellenebilir. Güncel sürüm bu sayfada yayınlanır.
+      </p>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/">← Ana Sayfa</a>
+      <a class="btn" href="/uygulama">Uygulama</a>
+      <a class="btn" href="/iade">İade Politikası</a>
+
+      <% if (supportEmail) { %>
+        <div class="muted small" style="margin-top:12px">Destek: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

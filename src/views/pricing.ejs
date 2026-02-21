@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fiyatlandırma • <%= appName %></title>
+  <meta name="description" content="<%= appName %> kredi paketleri ve ücretsiz deneme." />
+  <meta property="og:title" content="Fiyatlandırma • <%= appName %>" />
+  <meta property="og:description" content="1 ücretsiz analiz + kredi paketleri." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/fiyatlandirma" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+<div class="container">
+    <div class="card hero">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>Fiyatlandırma</h1>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 6px">
+        <span class="tag tag-free">🎁 <strong><%= freeTrial %></strong> ücretsiz analiz</span>
+        <span class="tag tag-info">🔒 Hesap gerektirmez</span>
+        <span class="tag tag-info">🧾 1 kredi = 1 analiz</span>
+      </div>
+
+      <p class="muted">Kredi = <strong>1 sözleşme analizi</strong>. Hesap açmadan kullanabilirsin.</p>
+
+      <% if (billingMode !== 'credits') { %>
+        <div class="warnbox">
+          <strong>Not:</strong> Bu sunucuda kredi sistemi kapalı (BILLING_MODE=off). Paketler sadece örnek.
+        </div>
+      <% } %>
+
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <div class="pricing-title">Ücretsiz Deneme</div>
+          <div style="margin-top:8px"><span class="tag tag-free">🎁 <%= freeTrial %> ücretsiz</span></div>
+          <div class="pricing-big"><%= freeTrial %> analiz</div>
+          <div class="muted small">İlk kullanım için.</div>
+          <div style="height:10px"></div>
+          <a class="btn primary" href="/uygulama">Başla</a>
+        </div>
+
+        <div class="pricing-card">
+          <div class="pricing-title">Kredi Paketleri</div>
+          <% if (packs && packs.length) { %>
+            <div class="packs" style="margin-top:10px">
+              <% packs.forEach(p => { %>
+                <div class="pricing-pack">
+                  <div>
+                    <div><strong><%= p.label %></strong></div>
+                    <div class="muted small"><%= p.credits %> analiz</div>
+                  </div>
+                  <div style="text-align:right">
+                    <% if (p.price != null) { %>
+                      <div><strong><%= p.price %> <%= p.currency || 'TRY' %></strong></div>
+                    <% } else { %>
+                      <div class="muted small">(fiyat sağlayıcıda)</div>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+            <div class="muted small" style="margin-top:10px">
+              Ödeme sağlayıcı: <strong><%= provider %></strong>
+            </div>
+          <% } else { %>
+            <div class="muted" style="margin-top:10px">
+              Paketler bu sunucuda tanımlı değil.
+            </div>
+            <div class="muted small" style="margin-top:6px">
+              İpucu: PAYMENTS_PROVIDER=iyzico ve IYZICO_PACKS tanımlayın.
+            </div>
+          <% } %>
+          <div style="height:10px"></div>
+          <a class="btn" href="/uygulama">Analize Git</a>
+        </div>
+
+        <div class="pricing-card">
+          <div class="pricing-title">Ne alıyorum?</div>
+          <ul class="muted" style="margin:10px 0 0 18px">
+            <li>Risk kartları (basit dil)</li>
+            <li>Pazarlık metni (kopyala-yapıştır)</li>
+            <li>Parasal etki etiketleri (uygunsa)</li>
+            <li>PDF rapor</li>
+          </ul>
+          <div style="height:10px"></div>
+          <a class="btn" href="/sss">SSS</a>
+        </div>
+      </div>
+
+      <details class="faq" style="margin-top:14px">
+        <summary>Kredi ne demek?</summary>
+        <div>
+          <div class="muted">Kredi, uygulamadaki <strong>kullanım hakkı</strong> gibi düşünebilirsin.</div>
+          <ul class="muted" style="margin:10px 0 0 18px">
+            <li><strong>1 kredi = 1 sözleşme analizi</strong> (PDF/DOCX/TXT).</li>
+            <li>Analiz başarılı olursa 1 kredi düşer.</li>
+            <li>Kredi bitince yeni analiz yapamazsın, paket alıp devam edersin.</li>
+          </ul>
+          <div class="muted small" style="margin-top:10px">Not: Ücretsiz deneme hakkın, ilk kullanımda otomatik olarak devreye girer.</div>
+        </div>
+      </details>
+
+      <div class="muted small footer-links" style="margin-top:14px">
+        <a href="/">Ana Sayfa</a> • <a href="/sss">SSS</a> • <a href="/iletisim">İletişim</a> • <a href="/sorumluluk">Sorumluluk Reddi</a> • <a href="/gizlilik">Gizlilik</a> • <a href="/kullanim-sartlari">Kullanım Şartları</a> • <a href="/iade">İade</a>
+      </div>
+
+      <% if (supportEmail) { %>
+        <div class="muted small" style="margin-top:10px">Destek: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>
