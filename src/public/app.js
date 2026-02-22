@@ -1,5 +1,19 @@
 const $ = (id) => document.getElementById(id);
 
+// CSRF (double-submit cookie) header'ı için cookie okuma helper'ı
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[-.]/g, "\\$&") + "=([^;]*)"));
+  return m ? decodeURIComponent(m[2]) : "";
+}
+function csrfToken() {
+  return getCookie("csrf_token");
+}
+function withCsrf(headers = {}) {
+  const t = csrfToken();
+  if (t) headers["X-CSRF-Token"] = t;
+  return headers;
+}
+
 const fileInput = $("file");
 const roleSelect = $("role");
 const packSelect = $("pack");
@@ -47,6 +61,12 @@ const metaLine = $("metaLine");
 const qualityLine = $("qualityLine");
 const issueCountEl = $("issueCount");
 const softCountEl = $("softCount");
+
+// Skor açıklaması alanı
+const scoreMeaningEl = $("scoreMeaning");
+const scoreFactorsEl = $("scoreFactors");
+const scoreDriversEl = $("scoreDrivers");
+const scoreCounterEl = $("scoreCounterfactual");
 
 const top3List = $("top3List");
 const issueList = $("issueList");
@@ -483,7 +503,7 @@ btnRestore?.addEventListener("click", async () => {
   try {
     const resp = await fetch("/api/restore", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrf({ "Content-Type": "application/json" }),
       body: JSON.stringify({ token })
     });
     const data = await resp.json();
@@ -526,7 +546,7 @@ btnDemo?.addEventListener("click", async () => {
     const pack = packSelect?.value || "genel";
     const resp = await fetch("/api/analyze-demo", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrf({ "Content-Type": "application/json" }),
       body: JSON.stringify({ role, pack })
     });
     const data = await resp.json();
@@ -569,7 +589,7 @@ btnAnalyze?.addEventListener("click", async () => {
     fd.append("role", role);
     fd.append("pack", pack);
 
-    const resp = await fetch("/api/analyze-file", { method: "POST", body: fd });
+    const resp = await fetch("/api/analyze-file", { method: "POST", headers: withCsrf({}), body: fd });
     const data = await resp.json();
     if (!data.ok) throw new Error(data.error || "Analiz başarısız.");
 
@@ -608,7 +628,7 @@ btnPdf?.addEventListener("click", async () => {
 
     const resp = await fetch("/api/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrf({ "Content-Type": "application/json" }),
       body: JSON.stringify({ analysis: lastAnalysis, text: lastText, extracted: lastExtracted, accessKey })
     });
 
@@ -653,7 +673,7 @@ btnRedeem?.addEventListener("click", async () => {
   try {
     const resp = await fetch("/api/redeem", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrf({ "Content-Type": "application/json" }),
       body: JSON.stringify({ code })
     });
     const data = await resp.json();
@@ -845,6 +865,57 @@ function roleLabel(role) {
   }
 }
 
+function renderScoreExplain(summary) {
+  const ex = summary?.scoreExplain || null;
+
+  // Güvenli varsayılanlar
+  const meaning = ex?.meaning || "Bu skor bir tehlike alarmı veya ‘imzala/imzalama’ kararı değildir. Sözleşme dilinde senin aleyhine işleyebilecek madde yoğunluğunu yaklaşık olarak gösterir.";
+  if (scoreMeaningEl) scoreMeaningEl.textContent = meaning;
+
+  // Faktörler (2–3 madde)
+  if (scoreFactorsEl) {
+    const lines = Array.isArray(ex?.factors) ? ex.factors : [];
+    scoreFactorsEl.innerHTML = lines.slice(0, 3).map(l => `<li>${escapeHtml(String(l))}</li>`).join("");
+  }
+
+  // Skoru en çok artıran 3 madde
+  if (scoreDriversEl) {
+    const drivers = Array.isArray(ex?.topDrivers) ? ex.topDrivers : [];
+    if (!drivers.length) {
+      scoreDriversEl.innerHTML = `<div class="muted small">—</div>`;
+    } else {
+      scoreDriversEl.innerHTML = drivers.slice(0, 3).map(d => {
+        const sev = String(d.severity || "");
+        const badge = sev ? `<span class="badge badge-${sev}">${sevTr(sev)}</span>` : "";
+        const pts = Number(d.points || 0);
+        const ptsText = Number.isFinite(pts) && pts > 0 ? `<span class="driver-points">+${pts.toFixed(1)} puan</span>` : "";
+        const cat = d.category ? `<div class="driver-meta">${escapeHtml(String(d.category))}</div>` : "";
+        return `
+          <div class="driver-item">
+            <div>
+              <div class="driver-title">${escapeHtml(String(d.title || ""))}</div>
+              ${cat}
+            </div>
+            <div class="driver-right">${badge}${ptsText}</div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  // Counterfactual: Bu maddeler olmasa skor kaç olurdu?
+  if (scoreCounterEl) {
+    const w = Number(ex?.withoutTopDriversScore);
+    if (Number.isFinite(w)) {
+      scoreCounterEl.textContent = `Bu 3 madde olmasa skor yaklaşık ${w}/100 olurdu.`;
+      scoreCounterEl.classList.remove("hidden");
+    } else {
+      scoreCounterEl.textContent = "";
+      scoreCounterEl.classList.add("hidden");
+    }
+  }
+}
+
 function renderAll(analysis, extracted) {
   const s = analysis.summary;
   const m = analysis.meta;
@@ -865,6 +936,8 @@ function renderAll(analysis, extracted) {
 
   issueCountEl.textContent = `${s.issueCount}`;
   softCountEl.textContent = `${s.softWarningCount}`;
+
+  renderScoreExplain(s);
 
   renderTop3(analysis.topRisks || []);
   renderFilters(s);

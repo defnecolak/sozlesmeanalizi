@@ -1,4 +1,4 @@
-# Avukatım (PRO / Launch-ready)
+# Sözleşmem (PRO / Launch-ready)
 PDF/DOCX/TXT yükle → metni çıkar → (gerekirse OCR) → risk analizi → PDF rapor.
 
 > Hukuk danışmanlığı değildir. Bilgilendirme amaçlı “risk sinyali” üretir.
@@ -21,6 +21,11 @@ Node.js 18+ gerekli.
 cd avukatim
 npm install
 cp .env.example .env
+
+# (Opsiyonel) KVKK/Politika sayfaları için
+# LEGAL_ENTITY_NAME=Şirket/Ad Soyad
+# LEGAL_ENTITY_ADDRESS=Adres
+# POLICY_LAST_UPDATED=2026-02-16
 npm run dev
 ```
 
@@ -170,7 +175,7 @@ Render panel:
 - Start Command: `npm start`
 
 Gerekli env örneği:
-- `APP_NAME=Avukatım`
+- `APP_NAME=Sözleşmem`
 - `APP_BASE_URL=https://<render-url-ya-da-domain>`
 - `SUPPORT_EMAIL=destek@...`
 - `BILLING_MODE=credits`
@@ -182,7 +187,11 @@ Gerekli env örneği:
 - `IYZICO_PACKS=[{"label":"1 Kredi • 49₺","credits":1,"price":49,"currency":"TRY"},{"label":"5 Kredi • 169₺","credits":5,"price":169,"currency":"TRY"},{"label":"10 Kredi • 299₺","credits":10,"price":299,"currency":"TRY"},{"label":"20 Kredi • 499₺","credits":20,"price":499,"currency":"TRY"}]`
 - `DATA_DIR=/var/data` (persistent disk mount ettiysen)
 
-> Render sana bir URL verir. iyzico merchant başvurusunda "site adresi" olarak bunu kullanabilirsin.
+> Render sana bir URL verir.
+Notlar:
+- Render'da **Health Check Path** istersen `/healthz` yapabilirsin (bu projede `/health` ve `/healthz` ikisi de var).
+- Deploy sırasında `FORCE_HTTPS=true` açtıysan, health endpointleri yine 200 döner (redirect yok).
+ iyzico merchant başvurusunda "site adresi" olarak bunu kullanabilirsin.
 
 ### 3) Smoke test (canlıya çıkmadan önce)
 Sunucu çalışırken:
@@ -203,4 +212,4 @@ powershell -ExecutionPolicy Bypass -File scripts\smoke.ps1
 - ✅ iyzico sandbox ödeme akışı (paket seç → ödeme → kredi artıyor)
 - ✅ Çerezleri sil → "Krediyi Kurtar" ile restore token çalışıyor
 - ✅ `DATA_DIR` ile kredi kaydı deploy sonrası kaybolmuyor
-- ✅ Sorumluluk/Gizlilik/Kullanım Şartları/İade sayfaları erişilebilir
+- ✅ Sorumluluk/Gizlilik/KVKK/Kullanım Şartları/İade sayfaları erişilebilir

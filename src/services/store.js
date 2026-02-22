@@ -42,7 +42,8 @@ async function ensureStore() {
       restoreTokens: {},
       iyzicoOrders: {}
     };
-    await fs.writeFile(storePath, JSON.stringify(init, null, 2), "utf8");
+    await fs.writeFile(storePath, JSON.stringify(init, null, 2), { encoding: "utf8", mode: 0o600 });
+    try { await fs.chmod(storePath, 0o600); } catch {}
   }
 }
 
@@ -59,6 +60,61 @@ function isLegacyDeviceRecord(v) {
 function nowIso() {
   return new Date().toISOString();
 }
+
+function parseIso(v) {
+  if (!v) return 0;
+  const t = Date.parse(String(v));
+  return Number.isFinite(t) ? t : 0;
+}
+
+function days(n) {
+  return n * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Veri minimizasyonu: çok eski/pending kayıtları otomatik temizle.
+ * Bu, store.json sızıntısı gibi "en kötü günde" eline geçen veri miktarını azaltır.
+ * TTL değerleri env ile ayarlanabilir.
+ */
+function purgeOldRecords(store) {
+  const now = Date.now();
+
+  const restorePendingTtlDays = Number(process.env.RESTORE_TOKEN_TTL_DAYS || 30);
+  const iyzicoTtlDays = Number(process.env.IYZICO_ORDER_TTL_DAYS || 30);
+  const iyzicoPaidTtlDays = Number(process.env.IYZICO_ORDER_PAID_TTL_DAYS || 180);
+  const orderTtlDays = Number(process.env.ORDER_TTL_DAYS || 365);
+  const orderPaidTtlDays = Number(process.env.ORDER_PAID_TTL_DAYS || 730);
+
+  // restoreTokens: pending çok uzun süre tutulmasın
+  for (const [token, rec] of Object.entries(store.restoreTokens || {})) {
+    const created = parseIso(rec?.createdAt);
+    const status = String(rec?.status || "");
+    if (status === "pending" && created && created < (now - days(restorePendingTtlDays))) {
+      delete store.restoreTokens[token];
+    }
+  }
+
+  // iyzicoOrders: callback/checkout izleri sonsuza kadar kalmasın
+  for (const [convId, rec] of Object.entries(store.iyzicoOrders || {})) {
+    const created = parseIso(rec?.createdAt);
+    const status = String(rec?.status || "");
+    if (!created) continue;
+    const ttl = (status === "paid") ? iyzicoPaidTtlDays : iyzicoTtlDays;
+    if (created < (now - days(ttl))) delete store.iyzicoOrders[convId];
+  }
+
+  // orders: çok eski kayıtları buda (özellikle failed/pending)
+  for (const [orderId, rec] of Object.entries(store.orders || {})) {
+    const created = parseIso(rec?.createdAt);
+    const status = String(rec?.status || "");
+    if (!created) continue;
+    const ttl = (status === "paid") ? orderPaidTtlDays : orderTtlDays;
+    if (created < (now - days(ttl))) delete store.orders[orderId];
+  }
+
+  return store;
+}
+
 
 function migrateStore(obj) {
   const out = (obj && typeof obj === "object") ? obj : {};
@@ -137,9 +193,9 @@ async function readStore() {
   const raw = await fs.readFile(storePath, "utf8");
   try {
     const obj = JSON.parse(raw);
-    return migrateStore(obj);
+    return purgeOldRecords(migrateStore(obj));
   } catch {
-    return migrateStore({});
+    return purgeOldRecords(migrateStore({}));
   }
 }
 
@@ -149,12 +205,13 @@ async function writeStore(obj) {
 
   // atomic-ish write
   const tmp = storePath + ".tmp";
-  await fs.writeFile(tmp, JSON.stringify(out, null, 2), "utf8");
+  await fs.writeFile(tmp, JSON.stringify(out, null, 2), { encoding: "utf8", mode: 0o600 });
   await fs.rename(tmp, storePath);
 
   // Lightweight safety backup (keeps last successful write)
   try {
     await fs.copyFile(storePath, storePath + ".bak");
+    try { await fs.chmod(storePath + ".bak", 0o600); } catch {}
   } catch {
     // ignore
   }

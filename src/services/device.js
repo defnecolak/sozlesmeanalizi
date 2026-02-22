@@ -6,7 +6,11 @@ function parseCookies(req) {
   header.split(";").forEach(part => {
     const [k, ...rest] = part.trim().split("=");
     if (!k) return;
-    out[k] = decodeURIComponent(rest.join("=") || "");
+    const raw = rest.join("=") || "";
+    if (raw.length > 4096) return; // aşırı büyük cookie değerlerini yok say
+    let val = raw;
+    try { val = decodeURIComponent(raw); } catch { val = raw; }
+    out[k] = val;
   });
   return out;
 }

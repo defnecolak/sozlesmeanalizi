@@ -41,12 +41,40 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
 
   if (ex.fileName) doc.text(`Dosya: ${ex.fileName}`);
   doc.text(`Rol: ${roleLabel(s.role)}`);
-  doc.text(`Risk Endeksi: ${s.riskScore}/100 (Seviye: ${s.riskLevel || "-"})`);
+  doc.text(`Risk Skoru: ${s.riskScore}/100 (Seviye: ${s.riskLevel || "-"})`);
   if (s.quality?.label) doc.text(`Metin Kalitesi: ${s.quality.label}`);
 
   doc.fontSize(10).fillColor("#444").text(`Analiz zamanı: ${m.analyzedAt || "-"}`);
   doc.fillColor("#000").fontSize(11);
   doc.moveDown();
+
+  // Skor açıklaması (explainability)
+  const exScore = s?.scoreExplain || null;
+  doc.font("DejaVuBold").fontSize(14).text("Skor Açıklaması", { underline: true });
+  doc.moveDown(0.35);
+  doc.font("DejaVu").fontSize(11);
+  if (exScore?.meaning) {
+    doc.text(exScore.meaning);
+    doc.moveDown(0.25);
+  }
+  if (Array.isArray(exScore?.factors) && exScore.factors.length) {
+    exScore.factors.slice(0, 4).forEach((l) => doc.text(`• ${truncate(String(l), 260)}`));
+    doc.moveDown(0.25);
+  }
+
+  if (Array.isArray(exScore?.topDrivers) && exScore.topDrivers.length) {
+    doc.font("DejaVuBold").fontSize(11).text("Skoru en çok artıran 3 madde:");
+    doc.font("DejaVu").fontSize(11);
+    exScore.topDrivers.slice(0, 3).forEach((d, idx) => {
+      doc.text(`${idx + 1}. ${d.title} (${sevTR(d.severity || "")})`);
+    });
+    if (Number.isFinite(Number(exScore.withoutTopDriversScore))) {
+      doc.moveDown(0.15);
+      doc.fontSize(10).fillColor("#444").text(`Bu 3 madde olmasa skor yaklaşık ${exScore.withoutTopDriversScore}/100 olurdu.`);
+      doc.fillColor("#000").fontSize(11);
+    }
+    doc.moveDown(0.3);
+  }
 
   // Top 3
   const top = analysis?.topRisks || [];

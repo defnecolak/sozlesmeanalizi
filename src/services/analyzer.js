@@ -12,7 +12,10 @@ const PACK_ALIASES = {
   abonelik: ["saas"],
   arac: ["kira", "hizmet"],
   seyahat: ["hizmet", "satis"],
-  sigorta: ["kredi", "hizmet"]
+  sigorta: ["kredi", "hizmet"],
+
+  // Influencer anlaşmaları genelde "hizmet" + "fikri mülkiyet" + "gizlilik" karışımı
+  influencer: ["hizmet", "satis", "gizlilik"]
 };
 
 function filterRulesByPack(packId) {
@@ -65,7 +68,14 @@ function packFactor(pack) {
   if (p === "arac") return 1.18;
   if (p === "seyahat") return 1.18;
   if (p === "sigorta") return 1.22;
+  if (p === "influencer") return 1.12;
   return 1.0;
+}
+
+function scoreFromPoints(points, pack) {
+  const k = 95 * packFactor(pack);
+  const p = Math.max(0, Number(points || 0));
+  return Math.round(Math.min(100, Math.max(0, 100 * (1 - Math.exp(-p / k)))));
 }
 
 function occurrenceMultiplier(cnt, pack) {
@@ -271,6 +281,7 @@ function analyzeContract(rawText, opts = {}) {
   for (const it of groupedIssues) perRuleCounts[it.id] = Math.max(1, Number(it.occurrences || 1));
 
   let riskPoints = 0;
+  const rulePointsById = {};
   for (const [rid, cnt] of Object.entries(perRuleCounts)) {
     const sample = groupedIssues.find(x => x.id === rid);
     const w = SEVERITY_WEIGHT[sample?.severity || "LOW"] || 5;
@@ -278,7 +289,9 @@ function analyzeContract(rawText, opts = {}) {
     const rule = RULES.find(r => r.id === rid) || {};
     const rm = roleMultiplier(rule, role);
     const packAdj = (rule.packAdjust && typeof rule.packAdjust === "object" && rule.packAdjust[pack]) ? Number(rule.packAdjust[pack]) : 1.0;
-    riskPoints += (w * mult * rm * (Number.isFinite(packAdj) ? packAdj : 1.0));
+    const pts = (w * mult * rm * (Number.isFinite(packAdj) ? packAdj : 1.0));
+    rulePointsById[rid] = pts;
+    riskPoints += pts;
   }
 
   // Soft warnings (missing key things)
@@ -360,8 +373,12 @@ if (hasConf && !hasConfExceptions) {
     riskPoints += 6;
   }
 
-  const k = 95 * packFactor(pack);
-  const riskScore = Math.round(Math.min(100, Math.max(0, 100 * (1 - Math.exp(-riskPoints / k)))));
+  // Her risk maddesine, skoru ne kadar etkilediğini (puan) ekleyelim.
+  for (const it of groupedIssues) {
+    it.scorePoints = Number(rulePointsById[it.id] || 0);
+  }
+
+  const riskScore = scoreFromPoints(riskPoints, pack);
   const levelInfo = getLevelFromScore(riskScore);
 
   groupedIssues.sort((a, b) => {
@@ -384,7 +401,31 @@ if (hasConf && !hasConfExceptions) {
   const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   for (const it of groupedIssues) severityCounts[it.severity] = (severityCounts[it.severity] || 0) + 1;
 
-  
+  // --- Skor açıklaması (explainability)
+  // Amaç: "52/100 = imzala" gibi algılanmasın. Skoru hangi maddelerin yükselttiğini sade şekilde anlat.
+  const byPoints = [...groupedIssues].sort((a, b) => Number(b.scorePoints || 0) - Number(a.scorePoints || 0));
+  const topDriverSumRaw = byPoints.slice(0, 3).reduce((acc, it) => acc + Number(it.scorePoints || 0), 0);
+  const topDrivers = byPoints.slice(0, 3).map(it => ({
+    id: it.id,
+    title: it.title,
+    severity: it.severity,
+    category: it.category,
+    points: Math.round((Number(it.scorePoints || 0) + Number.EPSILON) * 10) / 10
+  }));
+  const withoutTopDriversScore = scoreFromPoints(Math.max(0, riskPoints - topDriverSumRaw), pack);
+
+  const critHigh = (severityCounts.CRITICAL || 0) + (severityCounts.HIGH || 0);
+  const factorLines = [];
+  if (critHigh > 0) factorLines.push(`${critHigh} adet kritik/yüksek risk sinyali bulundu.`);
+  if (topDrivers.length) factorLines.push(`Skoru en çok artıran maddeler: ${topDrivers.map(d => d.title).join(" • ")}.`);
+  if (softWarnings.length) factorLines.push(`${softWarnings.length} adet eksik/belirsiz alan sinyali skoru artırdı.`);
+
+  const scoreExplain = {
+    meaning: "Bu skor bir tehlike alarmı veya ‘imzala/imzalama’ kararı değildir. Sözleşme dilinde senin aleyhine işleyebilecek maddelerin yoğunluğunu ve şiddetini yaklaşık olarak gösterir.",
+    factors: factorLines.slice(0, 3),
+    topDrivers,
+    withoutTopDriversScore
+  };
 
 // Simülasyonlar (ör. Düğün/Etkinlik maliyet)
 let simulation = null;
@@ -418,7 +459,8 @@ return {
       softWarningCount: softWarnings.length,
       quality: quality ? { label: quality.label, score: quality.score } : null,
       categoryCounts,
-      severityCounts
+      severityCounts,
+      scoreExplain
     },
     topRisks,
     issues: groupedIssues,

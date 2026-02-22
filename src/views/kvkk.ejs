@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KVKK Aydınlatma Metni • <%= appName %></title>
+  <meta name="description" content="<%= appName %> KVKK aydınlatma metni." />
+  <meta property="og:title" content="KVKK Aydınlatma Metni • <%= appName %>" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="<%= baseUrl %>/kvkk" />
+  <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+  </script>
+  <link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <a class="btn primary tiny" href="/uygulama">Analize Başla</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <div class="brand-row">
+        <img class="brand-logo" src="/public/assets/logo.svg" alt="<%= appName %>" />
+      </div>
+
+      <h1>KVKK Aydınlatma Metni</h1>
+      <div class="muted small">Son güncelleme: <%= lastUpdated %></div>
+
+      <div style="height:12px"></div>
+      <div class="muted small">
+        Bu metin, <strong><%= appName %></strong> uygulamasında kişisel verilerin nasıl işlendiğini açıklar.
+        Yayına çıkmadan önce işletme bilgilerinle uyumlu olacak şekilde gözden geçirmen önerilir (hukuki danışmanlık değildir).
+      </div>
+
+      <h2>1) Veri sorumlusu</h2>
+      <p>
+        Veri sorumlusu: <strong><%= legalName %></strong><br/>
+        <% if (legalAddress) { %>Adres: <%= legalAddress %><br/><% } %>
+        <% if (supportEmail) { %>İletişim: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a><% } %>
+      </p>
+
+      <h2>2) Hangi kişisel veriler işlenebilir?</h2>
+      <ul>
+        <li>
+          <strong>Yüklediğin sözleşme dosyası/metin:</strong>
+          Sözleşme içeriğinde TC kimlik no, adres, imza, IBAN, e-posta, telefon gibi veriler bulunabilir.
+          Bu içerik yalnızca analiz/raporlama amacıyla geçici olarak işlenir.
+        </li>
+        <li>
+          <strong>Teknik veriler:</strong>
+          IP adresi, tarayıcı/cihaz bilgileri, hata kayıtları (log), güvenlik kayıtları (rate-limit/abuse) gibi veriler.
+        </li>
+        <li>
+          <strong>Kredi/ödeme verileri (varsa):</strong>
+          Kredi kullanımını yönetmek için cihaz kimliği (çerez) ve satın alma/işlem kayıtları (ör. paket, tutar, ödeme durumu, işlem kimliği).
+          Kart bilgileri uygulama tarafından tutulmaz; ödeme sağlayıcısı tarafından işlenir.
+        </li>
+      </ul>
+
+      <h2>3) Kişisel veriler hangi amaçlarla işlenir?</h2>
+      <ul>
+        <li>Sözleşme metninden risk sinyallerini tespit etmek ve analiz çıktısı üretmek</li>
+        <li>PDF rapor ve pazarlık/revizyon metni üretmek</li>
+        <li>Hizmetin güvenliğini sağlamak (kötüye kullanımın önlenmesi, oran sınırlama, hata/performans izleme)</li>
+        <li>Ücretlendirme/kredi sistemi aktifse satın alma sonrası krediyi tanımlamak ve kredi kullanımını takip etmek</li>
+        <li>Destek taleplerini yanıtlamak</li>
+      </ul>
+
+      <h2>4) İşleme şartı / hukuki sebep (özet)</h2>
+      <p class="muted">
+        KVKK kapsamındaki işleme şartları; hizmetin sunulması için zorunlu olması, bir hakkın tesisi/kullanılması, meşru menfaat ve benzeri hukuki sebeplere dayanabilir.
+        Ödeme işlemleri ise ilgili ödeme sağlayıcısı sözleşmeleri/kuralları çerçevesinde yürütülür.
+      </p>
+
+      <h2>5) Veri saklama süresi ve silme</h2>
+      <ul>
+        <li>
+          <strong>Ham dosya saklama:</strong>
+          Yüklenen dosya, analiz sırasında sunucuda geçici bir klasörde işlenir ve analiz bittiğinde otomatik olarak silinir.
+          Sunucu hatası/yarıda kalma gibi olağan dışı durumlarda da eski geçici dosyalar belirli aralıklarla temizlenir (varsayılan: en geç <%= tmpUploadTtlMin %> dakika).
+        </li>
+        <li>
+          <strong>Analiz metni / rapor saklama:</strong>
+          Uygulama sözleşme metnini veya analiz raporunu sunucuda kalıcı olarak saklamaz. PDF rapor talep edildiğinde üretilir ve indirilir.
+        </li>
+        <li>
+          <strong>Tarayıcı “Geçmiş”:</strong>
+          “Geçmiş” listesi, yalnızca bu cihazda (tarayıcıda) bir analiz özeti tutabilir; sunucu tarafında merkezi bir geçmiş tutulmaz.
+        </li>
+        <li>
+          <strong>Kredi/işlem kayıtları:</strong>
+          Kredi ve ödeme kayıtları; hizmetin sürdürülebilirliği ve kullanıcı güveni için belirli bir süre tutulabilir ve süre sonunda otomatik temizlenebilir (veri minimizasyonu).
+        </li>
+      </ul>
+
+      <h2>6) Hassas veri sızıntısına karşı önlemler</h2>
+      <ul>
+        <li>Hata loglarında sözleşme metninin/alıntıların yazdırılmaması hedeflenir (log minimizasyonu).</li>
+        <li>Üretim ortamında kullanıcıya ayrıntılı teknik hata/stack trace gösterilmez.</li>
+        <li>Uygulama; güvenli başlıklar (CSP, HSTS opsiyonel), CSRF koruması, rate-limit, upload doğrulama gibi katmanlarla korunur.</li>
+      </ul>
+
+      <h2>7) Aktarım / üçüncü taraflar</h2>
+      <ul>
+        <li><strong>Ödeme sağlayıcıları:</strong> Ödeme alınması durumunda, ödeme işlemleri iyzico/Lemon Squeezy gibi sağlayıcılar üzerinden gerçekleşir.</li>
+        <li><strong>Barındırma/altyapı:</strong> Sunucu barındırma sağlayıcısı teknik olarak erişim logları gibi sınırlı teknik verileri işleyebilir.</li>
+        <li><strong>Analiz servisi:</strong> Uygulama, sözleşme metnini üçüncü taraf “analiz API”lerine göndermeden çalışacak şekilde tasarlanmıştır (kurulumunuza bağlı olarak değişebilir).</li>
+      </ul>
+
+      <h2>8) KVKK kapsamındaki haklar</h2>
+      <p>
+        KVKK’nın 11. maddesi kapsamındaki haklarınızı kullanmak için yukarıdaki iletişim kanallarından bize ulaşabilirsiniz.
+      </p>
+
+      <div style="height:14px"></div>
+      <a class="btn" href="/">← Ana Sayfa</a>
+      <a class="btn" href="/gizlilik">Gizlilik</a>
+      <a class="btn" href="/kullanim-sartlari">Kullanım Şartları</a>
+    </div>
+  </div>
+</body>
+</html>

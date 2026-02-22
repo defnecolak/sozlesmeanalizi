@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { readStore, writeStore } = require("./store");
 
 function billingMode() {
@@ -37,6 +38,14 @@ function freeTrialLimit() {
 function nowIso() {
   return new Date().toISOString();
 }
+
+function safeEqual(a, b) {
+  // Sabit süreli karşılaştırma (timing side-channel riskini azaltır)
+  const ha = crypto.createHash("sha256").update(String(a || ""), "utf8").digest();
+  const hb = crypto.createHash("sha256").update(String(b || ""), "utf8").digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 
 async function getDeviceRecord(deviceId) {
   const store = await readStore();
@@ -140,6 +149,7 @@ async function redeemCode(deviceId, codeRaw) {
 
   const code = String(codeRaw || "").trim();
   if (!code) return { ok: false, error: "Kod boş olamaz." };
+  if (code.length > 64) return { ok: false, error: "Kod çok uzun." };
 
   const unlimitedKey = String(process.env.UNLIMITED_KEY || "").trim();
   const codes = parseCreditCodes();
@@ -150,7 +160,7 @@ async function redeemCode(deviceId, codeRaw) {
     return { ok: false, error: "Bu kod daha önce kullanılmış." };
   }
 
-  if (unlimitedKey && code === unlimitedKey) {
+  if (unlimitedKey && safeEqual(code, unlimitedKey)) {
     wallet.unlimited = true;
     wallet.updatedAt = nowIso();
     store.wallets[walletId] = wallet;
@@ -159,7 +169,7 @@ async function redeemCode(deviceId, codeRaw) {
     return { ok: true, added: "unlimited", status: await getStatus(deviceId) };
   }
 
-  const item = codes.find(x => x.code === code);
+  const item = codes.find(x => safeEqual(x.code, code));
   if (!item) return { ok: false, error: "Kod geçersiz." };
 
   wallet.credits = (wallet.credits || 0) + Number(item.credits || 0);
@@ -279,15 +289,14 @@ async function applyOrderRefunded({ orderId, provider = "lemonsqueezy" }) {
 }
 
 function makeRestoreToken() {
-  // short, typeable token (not too long, but still high entropy)
-  // Example: A8F3-6K2M-P9QD
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0,O,1,I
-  const pick = (n) => {
-    let s = "";
-    for (let i = 0; i < n; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
-    return s;
-  };
-  return `${pick(4)}-${pick(4)}-${pick(4)}`;
+  // Restore token: kullanıcıya gösterilen, kredi kurtarma anahtarı.
+  // Math.random() yerine kriptografik RNG kullanıyoruz.
+  // Format: XXXX-XXXX-XXXX-XXXX (16 karakter, ~80-bit entropi)
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32-char, 0/O/1/I yok
+  const bytes = crypto.randomBytes(16);
+  let s = "";
+  for (const b of bytes) s += alphabet[b & 31]; // 0..31 -> unbiased
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}`;
 }
 
 async function createRestoreToken(deviceId, expectedCredits = null) {

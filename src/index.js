@@ -8,6 +8,9 @@ const crypto = require("crypto");
 const fs = require("fs/promises");
 
 const { abuseMiddleware, rateLimitHandler } = require("./services/abuse");
+const { ensureCsrfCookie, requireCsrf } = require("./services/csrf");
+
+const { logError, logInfo } = require("./services/logger");
 
 const routes = require("./routes");
 
@@ -63,17 +66,21 @@ app.use((req, res, next) => {
   return next();
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number.parseInt(process.env.PORT || "3000", 10);
+const HOST = process.env.HOST || "0.0.0.0";
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 // Tüm EJS view'lara ortak değişkenler
 app.use((req, res, next) => {
-  res.locals.appName = process.env.APP_NAME || "Avukatım";
+  res.locals.appName = process.env.APP_NAME || "Sözleşmem";
   res.locals.appVersion = APP_VERSION;
   next();
 });
+
+// CSRF token cookie (double-submit) – istemcinin POST isteklerinde header ile göndermesi beklenir
+app.use(ensureCsrfCookie);
 
 function isSecureReq(req) {
   if (req.secure) return true;
@@ -85,6 +92,38 @@ function isSecureReq(req) {
 (async () => {
   try {
     await fs.mkdir(path.join(process.cwd(), "tmp_uploads"), { recursive: true });
+
+    // Geçici upload klasörünü güvenli şekilde temizle (crash/yarıda kalma durumları için)
+    const uploadDir = path.join(process.cwd(), "tmp_uploads");
+    const ttlMin = Number(process.env.TMP_UPLOAD_TTL_MIN || 30);
+    const ttlMs = (Number.isFinite(ttlMin) && ttlMin > 0 ? ttlMin : 30) * 60 * 1000;
+    const sweepIntervalMin = Number(process.env.TMP_UPLOAD_SWEEP_MIN || 10);
+    const sweepMs = (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) * 60 * 1000;
+
+    async function sweepTmpUploads() {
+      try {
+        const now = Date.now();
+        const entries = await fs.readdir(uploadDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (!ent.isFile()) continue;
+          const fp = path.join(uploadDir, ent.name);
+          let st;
+          try { st = await fs.stat(fp); } catch { continue; }
+          const age = now - Number(st.mtimeMs || st.ctimeMs || 0);
+          if (age > ttlMs) {
+            try { await fs.unlink(fp); } catch {}
+          }
+        }
+      } catch (e) {
+        logError("tmp_uploads_sweep_failed", e);
+      }
+    }
+
+    // İlk süpürme + periyodik
+    await sweepTmpUploads();
+    const _t = setInterval(sweepTmpUploads, sweepMs);
+    _t.unref?.();
+
     await fs.mkdir(path.join(process.cwd(), "tmp_ocr"), { recursive: true });
   } catch (e) {
     console.warn("⚠️ temp klasörleri oluşturulamadı:", e?.message || e);
@@ -104,6 +143,10 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   const force = String(process.env.FORCE_HTTPS || "").toLowerCase() === "true";
   if (!force) return next();
+
+  // Health check endpointleri HTTP üzerinden de çalışabilsin (deploy sırasında timeout riskini azaltır)
+  if (req.path === "/health" || req.path === "/healthz") return next();
+
   if (isSecureReq(req)) return next();
   const host = req.get("host");
   return res.redirect(301, `https://${host}${req.originalUrl}`);
@@ -143,6 +186,8 @@ app.use((req, res, next) => {
   );
   // Kurumsal ortamlarda legacy policy dosyaları üzerinden veri sızması riskini azaltır
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  // Cross-site isolation (modern tarayıcılarda) için süreç izolasyonunu teşvik eder
+  res.setHeader("Origin-Agent-Cluster", "?1");
   return next();
 });
 
@@ -209,18 +254,22 @@ app.use(
   })
 );
 
+// CSRF doğrulaması (yalnızca state-changing API istekleri)
+app.use("/api", requireCsrf);
+
 app.use("/", routes);
 
 // Son savunma hattı: beklenmeyen hatalar
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error("UNHANDLED_ERROR", err);
+  logError("unhandled_error", err, { rid: res.locals.requestId });
   if (res.headersSent) return;
   res.status(500).send("Sunucu hatası");
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`✅ ${(process.env.APP_NAME || "Avukatım")} çalışıyor: http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  const shownHost = HOST === "0.0.0.0" ? "localhost" : HOST;
+  console.log(`✅ ${appName} çalışıyor: http://${shownHost}:${PORT}`);
 });
 
 // Sunucu timeout ayarları (basit DoS dayanımı)

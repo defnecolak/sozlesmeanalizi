@@ -20,6 +20,7 @@ const { verifyWebhookSignature, getCheckoutPacks, buildCheckoutUrl, getVariantCr
 const { createClient: createIyzicoClient, getIyzicoPacks, makeConversationId, buildCheckoutRequest, createCheckoutForm, retrieveCheckoutForm, formatPrice } = require("./services/iyzico");
 const { rateLimitHandler, strikeIp } = require("./services/abuse");
 const { validateUploadedFile } = require("./services/uploadGuard");
+const { logError } = require("./services/logger");
 
 const router = express.Router();
 
@@ -303,7 +304,7 @@ router.get("/", async (req, res) => {
   // Analiz sayfası kullanıcı metni içerdiği için cache'lenmesin
   res.setHeader("Cache-Control", "no-store");
   res.render("landing", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     baseUrl: appBaseUrl(req)
   });
@@ -318,7 +319,7 @@ router.get("/fiyatlandirma", (req, res) => {
   })();
 
   res.render("pricing", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     billingMode: billingMode(),
     freeTrial: freeTrialLimit(),
@@ -330,7 +331,7 @@ router.get("/fiyatlandirma", (req, res) => {
 
 router.get("/sss", (req, res) => {
   res.render("faq", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     baseUrl: appBaseUrl(req)
   });
@@ -338,7 +339,7 @@ router.get("/sss", (req, res) => {
 
 router.get("/iletisim", (req, res) => {
   res.render("contact", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     baseUrl: appBaseUrl(req)
   });
@@ -350,7 +351,7 @@ router.get("/uygulama", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.render("app", {
     version: pkg.version,
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     maxFileMb: MAX_FILE_MB,
     roles: ROLES,
@@ -374,7 +375,7 @@ router.get("/odeme", (req, res) => {
   const provider = String(process.env.PAYMENTS_PROVIDER || "off").toLowerCase();
   if (provider !== "iyzico") {
     return res.status(404).render("404", {
-      appName: process.env.APP_NAME || "Avukatım",
+      appName: process.env.APP_NAME || "Sözleşmem",
       supportEmail: process.env.SUPPORT_EMAIL || "",
       baseUrl: appBaseUrl(req)
     });
@@ -391,7 +392,7 @@ router.get("/odeme", (req, res) => {
   // Cache'lenmesin (ödeme/checkout hassas)
   res.setHeader("Cache-Control", "no-store");
   return res.render("payments", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     baseUrl: appBaseUrl(req),
     packs,
@@ -399,11 +400,27 @@ router.get("/odeme", (req, res) => {
   });
 });
 
-router.get("/gizlilik", (req, res) => res.render("privacy", { appName: process.env.APP_NAME || "Avukatım", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
-router.get("/sorumluluk", (req, res) => res.render("disclaimer", { appName: process.env.APP_NAME || "Avukatım", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
-router.get("/kullanim-sartlari", (req, res) => res.render("terms", { appName: process.env.APP_NAME || "Avukatım", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
-router.get("/iade", (req, res) => res.render("refund", { appName: process.env.APP_NAME || "Avukatım", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
-router.get("/health", (req, res) => res.json({ ok: true, name: process.env.APP_NAME || "Avukatım" }));
+router.get("/gizlilik", (req, res) => res.render("privacy", {
+  appName: process.env.APP_NAME || "Sözleşmem",
+  supportEmail: process.env.SUPPORT_EMAIL || "",
+  baseUrl: appBaseUrl(req),
+  lastUpdated: process.env.POLICY_LAST_UPDATED || new Date().toISOString().slice(0, 10),
+  tmpUploadTtlMin: Number(process.env.TMP_UPLOAD_TTL_MIN || 30)
+}));
+router.get("/kvkk", (req, res) => res.render("kvkk", {
+  appName: process.env.APP_NAME || "Sözleşmem",
+  supportEmail: process.env.SUPPORT_EMAIL || "",
+  baseUrl: appBaseUrl(req),
+  legalName: process.env.LEGAL_ENTITY_NAME || (process.env.APP_NAME || "Sözleşmem"),
+  legalAddress: process.env.LEGAL_ENTITY_ADDRESS || "",
+  lastUpdated: process.env.POLICY_LAST_UPDATED || new Date().toISOString().slice(0, 10),
+  tmpUploadTtlMin: Number(process.env.TMP_UPLOAD_TTL_MIN || 30)
+}));
+router.get("/sorumluluk", (req, res) => res.render("disclaimer", { appName: process.env.APP_NAME || "Sözleşmem", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
+router.get("/kullanim-sartlari", (req, res) => res.render("terms", { appName: process.env.APP_NAME || "Sözleşmem", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
+router.get("/iade", (req, res) => res.render("refund", { appName: process.env.APP_NAME || "Sözleşmem", supportEmail: process.env.SUPPORT_EMAIL || "", baseUrl: appBaseUrl(req) }));
+router.get("/health", (req, res) => res.json({ ok: true, name: process.env.APP_NAME || "Sözleşmem" }));
+router.get("/healthz", (req, res) => res.json({ ok: true, name: process.env.APP_NAME || "Sözleşmem" }));
 
 // Favicon / PWA
 router.get("/favicon.ico", (req, res) => {
@@ -425,6 +442,7 @@ router.get("/sitemap.xml", (req, res) => {
     "/iletisim",
     "/sorumluluk",
     "/gizlilik",
+    "/kvkk",
     "/kullanim-sartlari",
     "/iade"
   ];
@@ -559,7 +577,7 @@ router.post("/api/iyzico/initiate", iyzicoInitLimiter, express.json({ limit: "40
       token: result.token || ""
     });
   } catch (err) {
-    console.error(err);
+    logError("routes_error", err, { rid: res.locals.requestId });
     return res.status(500).json({ ok: false, error: "Iyzico isteği sırasında hata oluştu." });
   }
 });
@@ -619,7 +637,7 @@ router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ 
     await writeStore(store);
     return res.status(200).send("ok");
   } catch (err) {
-    console.error(err);
+    logError("routes_error", err, { rid: res.locals.requestId });
     return res.status(200).send("error");
   }
 });
@@ -708,7 +726,7 @@ router.get("/ornek-rapor", (req, res) => {
   const doc = buildPdfReport({
     analysis,
     text: demo,
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     extracted: { fileName: "demo.txt" },
     options: { includeAppendix: false }
   });
@@ -791,7 +809,7 @@ router.post("/api/analyze-file", analyzeFileLimiter, analyzeFileSlowdown, upload
     });
 
   } catch (err) {
-    console.error(err);
+    logError("routes_error", err, { rid: res.locals.requestId });
     return res.status(500).json({ ok: false, error: err?.message || "Analiz sırasında hata oluştu." });
   } finally {
     try { if (req.file?.path) await fs.unlink(req.file.path); } catch {}
@@ -824,7 +842,7 @@ router.post("/api/report", reportLimiter, express.json({ limit: "5mb" }), async 
     const doc = buildPdfReport({
       analysis: safeAnalysis,
       text: safeText,
-      appName: process.env.APP_NAME || "Avukatım",
+      appName: process.env.APP_NAME || "Sözleşmem",
       extracted: extracted || null,
       options: { includeAppendix: true }
     });
@@ -832,7 +850,7 @@ router.post("/api/report", reportLimiter, express.json({ limit: "5mb" }), async 
     doc.end();
     });
   } catch (err) {
-    console.error(err);
+    logError("routes_error", err, { rid: res.locals.requestId });
     return res.status(500).json({ ok: false, error: "PDF üretilemedi." });
   }
 });
@@ -864,7 +882,7 @@ MADDE 6 - VERİ PAYLAŞIMI
 // 404 (sonda kalsın)
 router.use((req, res) => {
   res.status(404).render("404", {
-    appName: process.env.APP_NAME || "Avukatım",
+    appName: process.env.APP_NAME || "Sözleşmem",
     supportEmail: process.env.SUPPORT_EMAIL || "",
     baseUrl: appBaseUrl(req)
   });

@@ -123,7 +123,7 @@ async function startPayment() {
   try {
     const res = await fetch("/api/iyzico/initiate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withCsrf({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         credits,
         email: em,

@@ -429,6 +429,44 @@ input[type="file"]{
 .pill-high{background: rgba(251,113,133,0.12); border-color: rgba(251,113,133,0.25);}
 .pill-critical{background: rgba(251,113,133,0.18); border-color: rgba(251,113,133,0.35);}
 
+/* Skor açıklaması kutusu */
+.score-explain{
+  margin-top:12px;
+  padding:14px;
+  border-radius:14px;
+  background: rgba(255,255,255,0.03);
+  border:1px solid var(--border-soft);
+}
+
+.score-explain-head{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.driver-list{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.driver-item{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border-soft);
+  background: var(--surface-2);
+}
+
+.driver-title{ font-weight:900; line-height:1.25; }
+.driver-meta{ color: var(--muted); font-size:12px; margin-top:2px; }
+.driver-right{ display:flex; align-items:center; gap:8px; }
+.driver-points{ color: var(--muted); font-size:12px; font-variant-numeric: tabular-nums; }
+
 .top3{margin-top:14px}
 
 .filters{margin-top:14px; display:grid; grid-template-columns:1fr; gap:12px}

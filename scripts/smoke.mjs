@@ -11,6 +11,52 @@ import PDFDocument from "pdfkit";
 const BASE_URL = (process.env.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const SMOKE_TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS || 20000);
 
+// Basit cookie-jar (Node fetch cookie tutmaz; smoke test için yeterli)
+const cookieJar = new Map();
+
+function mergeSetCookies(res) {
+  try {
+    const list = (typeof res.headers.getSetCookie === "function")
+      ? res.headers.getSetCookie()
+      : (res.headers.raw?.()["set-cookie"] || []);
+    for (const c of list || []) {
+      const first = String(c).split(";")[0];
+      const eq = first.indexOf("=");
+      if (eq > 0) {
+        const name = first.slice(0, eq).trim();
+        const val = first.slice(eq + 1).trim();
+        if (name) cookieJar.set(name, val);
+      }
+    }
+  } catch {}
+}
+
+function cookieHeader() {
+  if (cookieJar.size === 0) return "";
+  return Array.from(cookieJar.entries()).map(([k, v]) => `${k}=${v}`).join("; ");
+}
+
+function csrfToken() {
+  return cookieJar.get("csrf_token") || "";
+}
+
+async function jarFetch(url, opts = {}) {
+  const headers = new Headers(opts.headers || {});
+  const ck = cookieHeader();
+  if (ck) headers.set("cookie", ck);
+
+  const method = String(opts.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    const t = csrfToken();
+    if (t) headers.set("x-csrf-token", t);
+  }
+
+  const res = await fetchWithTimeout(url, { ...opts, headers });
+  mergeSetCookies(res);
+  return res;
+}
+
+
 async function fetchWithTimeout(url, opts = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? SMOKE_TIMEOUT_MS);
@@ -32,7 +78,7 @@ function ok(msg) {
 }
 
 async function fetchText(url, opts = {}) {
-  const res = await fetchWithTimeout(url, opts);
+  const res = await jarFetch(url, opts);
   const text = await res.text();
   return { res, text };
 }
@@ -168,7 +214,7 @@ async function main() {
       extracted: { fileName: "demo.pdf" }
     };
 
-    const res = await fetchWithTimeout(`${BASE_URL}/api/report`, {
+    const res = await jarFetch(`${BASE_URL}/api/report`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)

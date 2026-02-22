@@ -46,7 +46,7 @@
         <% if (billingMode === "credits") { %>
           <div class="credits-pill hidden" id="creditsPill" title="Kalan analiz kredin">Kredi: <span id="creditsCount">—</span></div>
         <% } %>
-        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir"></button>
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir" title="Koyu/Açık tema"></button>
         <button class="btn tiny" id="btnDemo" type="button">Demo</button>
         <button class="btn tiny" id="btnReset" type="button">Sıfırla</button>
       </div>
@@ -81,6 +81,7 @@
           <select id="pack" class="select">
             <option value="genel">Genel</option>
             <option value="hizmet">Hizmet / Freelancer</option>
+            <option value="influencer">Influencer Anlaşması</option>
             <option value="etkinlik">Düğün / Etkinlik</option>
             <option value="kira">Kira</option>
             <option value="satis">Alım-Satım</option>
@@ -170,7 +171,7 @@
 
       <div class="score-grid">
         <div class="score-box">
-          <div class="muted small" title="Bu endeks, tespit edilen risk türleri ve şiddetine göre hesaplanan yaklaşık bir göstergedir.">Risk Endeksi</div>
+          <div class="muted small" title="Bu skor, tespit edilen risk türleri ve şiddetine göre hesaplanan yaklaşık bir göstergedir.">Risk Skoru</div>
           <div class="score" id="riskScore">—</div>
           <div class="pill" id="riskLevel">—</div>
         </div>
@@ -184,6 +185,17 @@
           <div class="score" id="softCount">—</div>
           <div class="muted small">Eksik/belirsiz alan sinyalleri</div>
         </div>
+      </div>
+
+      <div class="score-explain" id="scoreExplainBox">
+        <div class="score-explain-head">
+          <h3 style="margin:0">Skor Açıklaması</h3>
+          <div class="muted small" id="scoreMeaning">—</div>
+        </div>
+        <ul class="bullets" id="scoreFactors"></ul>
+        <div class="muted small" style="margin-top:10px"><strong>Skoru en çok artıran 3 madde</strong></div>
+        <div class="driver-list" id="scoreDrivers"></div>
+        <div class="muted small" id="scoreCounterfactual" style="margin-top:8px"></div>
       </div>
 
       <div class="top3">
@@ -279,7 +291,7 @@
     </section>
 
     <footer class="footer muted small">
-      <a href="/">Ana Sayfa</a> • <a href="/fiyatlandirma">Fiyatlandırma</a> • <a href="/sss">SSS</a> • <a href="/iletisim">İletişim</a> • <a href="/sorumluluk">Sorumluluk Reddi</a> • <a href="/gizlilik">Gizlilik</a> • <a href="/kullanim-sartlari">Kullanım Şartları</a> • <a href="/iade">İade Politikası</a>
+      <a href="/">Ana Sayfa</a> • <a href="/fiyatlandirma">Fiyatlandırma</a> • <a href="/sss">SSS</a> • <a href="/iletisim">İletişim</a> • <a href="/sorumluluk">Sorumluluk Reddi</a> • <a href="/gizlilik">Gizlilik</a> • <a href="/kvkk">KVKK</a> • <a href="/kullanim-sartlari">Kullanım Şartları</a> • <a href="/iade">İade Politikası</a>
       <% if (supportEmail) { %>
         <span> • Destek: <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></span>
       <% } %>
