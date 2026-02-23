@@ -68,13 +68,14 @@ app.use((req, res, next) => {
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 const HOST = process.env.HOST || "0.0.0.0";
+const APP_NAME = process.env.APP_NAME || "Sözleşmem";
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 // Tüm EJS view'lara ortak değişkenler
 app.use((req, res, next) => {
-  res.locals.appName = process.env.APP_NAME || "Sözleşmem";
+  res.locals.appName = APP_NAME;
   res.locals.appVersion = APP_VERSION;
   next();
 });
@@ -269,7 +270,7 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, HOST, () => {
   const shownHost = HOST === "0.0.0.0" ? "localhost" : HOST;
-  console.log(`✅ ${appName} çalışıyor: http://${shownHost}:${PORT}`);
+  console.log(`✅ ${APP_NAME} çalışıyor: http://${shownHost}:${PORT}`);
 });
 
 // Sunucu timeout ayarları (basit DoS dayanımı)
