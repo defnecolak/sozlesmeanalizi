@@ -1,220 +1,272 @@
-'use strict';
+require("dotenv").config();
+const express = require("express");
+const helmet = require("helmet");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const crypto = require("crypto");
+const fs = require("fs/promises");
 
-const path = require('path');
-const crypto = require('crypto');
-const express = require('express');
+const { abuseMiddleware, rateLimitHandler } = require("./services/abuse");
+const { ensureCsrfCookie, requireCsrf } = require("./services/csrf");
 
-let helmet;
+const { logError } = require("./services/logger");
+const routes = require("./routes");
+
+// View'larda sürüm göstermek için
+let APP_VERSION = "";
 try {
-  helmet = require('helmet');
-} catch (e) {
-  // helmet yoksa app yine de çalışsın
-  helmet = null;
-}
+  // src/ altından kök package.json
+  // eslint-disable-next-line import/no-dynamic-require, global-require
+  const pkg = require("../package.json");
+  APP_VERSION = String(pkg?.version || "");
+} catch {}
 
-// .env sadece local için (Render’da zaten ENV’leri panelden veriyorsun)
-try {
-  require('dotenv').config();
-} catch (_) {}
-
-// --------------------
-// ENV / Sabitler
-// --------------------
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const IS_PROD = NODE_ENV === 'production';
-
-// Render: PORT zorunlu (10000 gibi). Host: 0.0.0.0 olmalı.
-const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || '0.0.0.0';
-
-const APP_NAME = process.env.APP_NAME || 'Sözleşmem';
-
-// Render deploy commit hash varsa versiyon gibi göster
-const APP_VERSION =
-  process.env.APP_VERSION ||
-  (process.env.RENDER_GIT_COMMIT ? String(process.env.RENDER_GIT_COMMIT).slice(0, 7) : '');
-
-// --------------------
-// App
-// --------------------
 const app = express();
 
-// Render/Proxy arkasındasın → req.ip doğru gelsin + secure cookies doğru çalışsın
-app.set('trust proxy', 1);
+// EJS tarafında "cspNonce is not defined" edge-case'lerine karşı güvenli varsayılan
+app.locals.cspNonce = "";
 
-// Express header sızdırma
-app.disable('x-powered-by');
+app.disable("x-powered-by");
 
-// Request ID (log/trace için)
+// Render gibi reverse proxy ortamlarında doğru req.secure / proto için
+app.set("trust proxy", 1);
+
+// Anti-abuse / ban middleware
+app.use(abuseMiddleware);
+
+// --- Host allowlist (opsiyonel)
+// .env: ALLOWED_HOSTS=example.com,www.example.com,localhost
+const _rawAllowedHosts = String(process.env.ALLOWED_HOSTS || "").trim();
+const _allowedHosts = new Set(
+  _rawAllowedHosts
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
 app.use((req, res, next) => {
-  const rid = req.get('x-request-id') || crypto.randomUUID();
-  res.locals.requestId = rid;
-  res.setHeader('x-request-id', rid);
-  next();
+  if (_allowedHosts.size === 0) return next();
+  const hostHeader = String(req.headers.host || "").toLowerCase();
+  const hostOnly = hostHeader.split(":")[0];
+  const ok = _allowedHosts.has(hostOnly) || _allowedHosts.has(hostHeader);
+  if (!ok) return res.status(400).send("Bad Request");
+  return next();
 });
 
-// Health endpoint’ler (Render Health Check Path = /healthz)
-app.get('/healthz', (req, res) => res.status(200).send('ok'));
-app.get('/health', (req, res) => res.status(200).send('ok'));
+// HTTP method allowlist
+const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
+app.use((req, res, next) => {
+  if (!ALLOWED_METHODS.has(req.method)) return res.status(405).send("Method Not Allowed");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  return next();
+});
 
-// Güvenlik header’ları (helmet varsa)
-if (helmet) {
-  app.use(
-    helmet({
-      // CSP’yi yanlış ayarlamak ödeme sayfasını bozabiliyor.
-      // Şimdilik kapalı tutuyoruz; istersen sonra route bazlı CSP ekleriz.
-      contentSecurityPolicy: false,
-      crossOriginEmbedderPolicy: false,
-    })
-  );
-}
+const PORT = Number.parseInt(process.env.PORT || "3000", 10);
+const HOST = process.env.HOST || "0.0.0.0";
+const APP_NAME = process.env.APP_NAME || "Sözleşmem";
 
-// Body limitleri (DoS / dev payload engeli)
-app.use(express.json({ limit: process.env.JSON_LIMIT || '1mb' }));
-app.use(express.urlencoded({ extended: false, limit: process.env.FORM_LIMIT || '1mb' }));
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 
-// Basit IP rate limit (dependency yok, memory-based)
-// İstersen sonra Redis’e taşıyıp daha “production-grade” yaparız.
-function ipRateLimit({ windowMs, max, key = 'global' }) {
-  const hits = new Map();
-
-  function cleanup(now) {
-    // basit temizlik: map çok büyümesin
-    if (hits.size < 5000) return;
-    for (const [k, v] of hits.entries()) {
-      if (v.resetAt <= now) hits.delete(k);
-    }
-  }
-
-  return function (req, res, next) {
-    const now = Date.now();
-    cleanup(now);
-
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    const bucketKey = `${key}:${ip}`;
-
-    const cur = hits.get(bucketKey);
-    if (!cur || cur.resetAt <= now) {
-      hits.set(bucketKey, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-
-    cur.count += 1;
-    if (cur.count > max) {
-      const retryAfterSec = Math.ceil((cur.resetAt - now) / 1000);
-      res.setHeader('Retry-After', String(retryAfterSec));
-      return res.status(429).json({ ok: false, error: 'Çok fazla istek. Lütfen biraz bekle.' });
-    }
-
-    return next();
-  };
-}
-
-// Genel limit
-app.use(ipRateLimit({ windowMs: 60_000, max: 300, key: 'site' }));
-// API limit (biraz daha sıkı)
-app.use('/api', ipRateLimit({ windowMs: 60_000, max: 120, key: 'api' }));
-// Dosya analiz endpoint’i (en agresif)
-app.use('/api/analyze-file', ipRateLimit({ windowMs: 60_000, max: 20, key: 'analyze-file' }));
-
-// Views (EJS)
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-
-// Tüm sayfalara otomatik locals
+// View locals
 app.use((req, res, next) => {
   res.locals.appName = APP_NAME;
   res.locals.appVersion = APP_VERSION;
   next();
 });
 
-// Static (src/public varsa)
-app.use('/public', express.static(path.join(__dirname, 'public'), {
-  maxAge: IS_PROD ? '7d' : 0,
-  etag: true,
-}));
+// Body parsing
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "1mb" }));
 
-// --------------------
-// Routes
-// --------------------
-let routes;
-try {
-  routes = require('./routes');
-} catch (err) {
-  // Routes import patlarsa bile health endpointler zaten yukarıda çalışıyor.
-  // Render en azından "up" görür, sen loglardan hatayı yakalarsın.
-  console.error('[BOOT] routes load failed:', {
-    name: err?.name,
-    message: err?.message,
-    stack: IS_PROD ? undefined : err?.stack,
-  });
-  routes = null;
+// CSRF cookie (double-submit pattern)
+app.use(ensureCsrfCookie);
+
+function isSecureReq(req) {
+  if (req.secure) return true;
+  const xfProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return xfProto === "https";
 }
 
-if (routes) {
-  app.use('/', routes);
-} else {
-  app.get('*', (req, res) => {
-    res.status(500).send('Uygulama başlatılamadı (routes yüklenemedi). Logları kontrol et.');
-  });
-}
-
-// 404
-app.use((req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ ok: false, error: 'Not found' });
-  }
-  // 404.ejs varsa kullan
+// --- Startup: ensure temp dirs exist
+(async () => {
   try {
-    return res.status(404).render('404');
-  } catch {
-    return res.status(404).send('Sayfa bulunamadı');
+    const uploadDir = path.join(process.cwd(), "tmp_uploads");
+    await fs.mkdir(uploadDir, { recursive: true });
+    await fs.mkdir(path.join(process.cwd(), "tmp_ocr"), { recursive: true });
+
+    // tmp_uploads cleanup (TTL)
+    const ttlMin = Number(process.env.TMP_UPLOAD_TTL_MIN || 30);
+    const ttlMs = (Number.isFinite(ttlMin) && ttlMin > 0 ? ttlMin : 30) * 60 * 1000;
+    const sweepIntervalMin = Number(process.env.TMP_UPLOAD_SWEEP_MIN || 10);
+    const sweepMs =
+      (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) * 60 * 1000;
+
+    async function sweepTmpUploads() {
+      try {
+        const now = Date.now();
+        const entries = await fs.readdir(uploadDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (!ent.isFile()) continue;
+          const fp = path.join(uploadDir, ent.name);
+          let st;
+          try {
+            st = await fs.stat(fp);
+          } catch {
+            continue;
+          }
+          const age = now - Number(st.mtimeMs || st.ctimeMs || 0);
+          if (age > ttlMs) {
+            try {
+              await fs.unlink(fp);
+            } catch {}
+          }
+        }
+      } catch (e) {
+        logError("tmp_uploads_sweep_failed", e);
+      }
+    }
+
+    await sweepTmpUploads();
+    const t = setInterval(sweepTmpUploads, sweepMs);
+    t.unref?.();
+  } catch (e) {
+    console.warn("⚠️ temp klasörleri oluşturulamadı:", e?.message || e);
   }
+})();
+
+// Request-scoped nonce + request id
+app.use((req, res, next) => {
+  res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+  res.locals.requestId = crypto.randomUUID();
+  res.setHeader("X-Request-Id", res.locals.requestId);
+  next();
 });
 
-// Global error handler (metin sızıntısı yapmayacak şekilde)
+// Optional HTTPS redirect
+app.use((req, res, next) => {
+  const force = String(process.env.FORCE_HTTPS || "").toLowerCase() === "true";
+  if (!force) return next();
+  if (req.path === "/health" || req.path === "/healthz") return next();
+  if (isSecureReq(req)) return next();
+  const host = req.get("host");
+  return res.redirect(301, `https://${host}${req.originalUrl}`);
+});
+
+// HSTS (opsiyonel)
+app.use((req, res, next) => {
+  const enable = String(process.env.HSTS || "").toLowerCase() === "true";
+  if (!enable) return next();
+  if (!isSecureReq(req)) return next();
+
+  const preload = String(process.env.HSTS_PRELOAD || "").toLowerCase() === "true";
+  const maxAge = Number(process.env.HSTS_MAX_AGE || 31536000);
+  const parts = [
+    `max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`,
+    "includeSubDomains",
+  ];
+  if (preload) parts.push("preload");
+  res.setHeader("Strict-Transport-Security", parts.join("; "));
+  return next();
+});
+
+// Helmet (CSP'yi aşağıda nonce ile manuel basıyoruz)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "no-referrer" },
+  })
+);
+
+// Extra hardened headers
+app.use((req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), payment=(), interest-cohort=()"
+  );
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  res.setHeader("Origin-Agent-Cluster", "?1");
+  return next();
+});
+
+// Nonce-based CSP
+app.use((req, res, next) => {
+  const nonce =
+    res.locals.cspNonce || (res.locals.cspNonce = crypto.randomBytes(16).toString("base64"));
+
+  const isPaymentPage = req.path && String(req.path).startsWith("/odeme");
+  const iyzicoHosts = isPaymentPage ? ["https://*.iyzipay.com", "https://*.iyzico.com"] : [];
+
+  const parts = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    `form-action 'self' ${iyzicoHosts.join(" ")}`.trim(),
+    `img-src 'self' data: ${iyzicoHosts.join(" ")}`.trim(),
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'nonce-${nonce}' ${iyzicoHosts.join(" ")}`.trim(),
+    `connect-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
+    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
+  ];
+
+  const upgrade = String(
+    process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")
+  ).toLowerCase() === "true";
+  if (upgrade) parts.push("upgrade-insecure-requests");
+
+  res.setHeader("Content-Security-Policy", parts.join("; "));
+  next();
+});
+
+// Performance
+app.use(compression());
+app.use(
+  "/public",
+  express.static(path.join(__dirname, "public"), { maxAge: "7d", immutable: true })
+);
+
+// Rate limit (API)
+const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
+const max = Number(process.env.RATE_LIMIT_MAX || 80);
+app.use(
+  "/api/",
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { ok: false, error: "Çok fazla istek. Lütfen biraz bekleyin." },
+    handler: rateLimitHandler("api"),
+  })
+);
+
+// CSRF doğrulaması (yalnızca state-changing API istekleri)
+app.use("/api", requireCsrf);
+
+// Routes
+app.use("/", routes);
+
+// Global error handler
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  const rid = res.locals.requestId;
-
-  console.error('[unhandled_error]', {
-    rid,
-    path: req.originalUrl,
-    method: req.method,
-    name: err?.name,
-    code: err?.code,
-    message: err?.message,
-    stack: IS_PROD ? undefined : err?.stack,
-  });
-
-  if (res.headersSent) return next(err);
-
-  if (req.path.startsWith('/api')) {
-    return res.status(500).json({ ok: false, error: 'Sunucu hatası', requestId: rid });
-  }
-  return res.status(500).send(`Sunucu hatası (requestId: ${rid})`);
+  logError("unhandled_error", err, { rid: res.locals.requestId });
+  if (res.headersSent) return;
+  res.status(500).send("Sunucu hatası");
 });
 
-// --------------------
-// LISTEN (SADECE 1 KEZ!)
-// --------------------
+// ✅ Render için kritik: TEK listen + PORT env + 0.0.0.0 bind
 const server = app.listen(PORT, HOST, () => {
-  // içeride 0.0.0.0 bağlanınca dışarıdan erişilebilir; log için localhost gösterelim
-  const shownHost = (HOST === '0.0.0.0' || HOST === '::') ? 'localhost' : HOST;
+  const shownHost = HOST === "0.0.0.0" ? "localhost" : HOST;
   console.log(`✅ ${APP_NAME} çalışıyor: http://${shownHost}:${PORT}`);
 });
 
-// Basit timeout’lar (DoS dayanımı)
+// Basit DoS dayanımı
 try {
   server.requestTimeout = Number(process.env.SERVER_REQUEST_TIMEOUT_MS || 60_000);
   server.headersTimeout = Number(process.env.SERVER_HEADERS_TIMEOUT_MS || 65_000);
   server.keepAliveTimeout = Number(process.env.SERVER_KEEPALIVE_TIMEOUT_MS || 5_000);
 } catch {}
-
-// Graceful shutdown (Render SIGTERM yollar)
-function shutdown(signal) {
-  console.log(`[SHUTDOWN] ${signal} alındı, kapatılıyor...`);
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 10_000).unref();
-}
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
