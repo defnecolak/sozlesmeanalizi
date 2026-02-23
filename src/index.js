@@ -1,212 +1,295 @@
-"use strict";
-
-/**
- * Sözleşmem - Public launch ready server
- * - Render uyumlu PORT/0.0.0.0 bind
- * - Tek app.listen (çok önemli!)
- * - /healthz endpoint (Render Health Check)
- * - Security headers (Helmet) + CSP nonce
- * - Rate limit + upload guard + anti-abuse
- * - CSRF (yalnızca state-changing istekler)
- */
-
-const path = require("path");
-const crypto = require("crypto");
+// Lokal geliştirmede .env dosyasını yükle.
+// Render gibi ortamlarda env değişkenleri zaten panelden gelir.
+if (process.env.NODE_ENV !== "production") {
+  // eslint-disable-next-line global-require
+  require("dotenv").config();
+}
 const express = require("express");
-const compression = require("compression");
 const helmet = require("helmet");
-const cookieParser = require("cookie-parser");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const crypto = require("crypto");
+const fs = require("fs/promises");
+
+const { abuseMiddleware, rateLimitHandler } = require("./services/abuse");
+const { ensureCsrfCookie, requireCsrf } = require("./services/csrf");
+
+const { logError } = require("./services/logger");
 
 const routes = require("./routes");
 
-const { createLogger } = require("./services/logger");
-const { requestIdMiddleware } = require("./services/requestId");
-const {
-  ipRateLimitGlobal,
-  ipRateLimitAnalyzeFile,
-  ipRateLimitPayments,
-} = require("./services/ratelimit");
-const { uploadGuard } = require("./services/uploadGuard");
-const { requireCsrf, ensureCsrfCookie } = require("./services/csrf");
-const { sanitizeRequest } = require("./services/sanitize");
-const { hardenHeaders } = require("./services/hardenHeaders");
-const { allowlistHosts } = require("./services/allowlistHosts");
-const { protectPaymentsPage } = require("./services/paymentsIsolation");
-const { blockBadAgents } = require("./services/badAgents");
+// View'larda sürüm göstermek (ve bazı template hatalarını önlemek) için
+let APP_VERSION = "";
+try {
+  // src/ altından kök package.json
+  // eslint-disable-next-line import/no-dynamic-require, global-require
+  const pkg = require("../package.json");
+  APP_VERSION = String(pkg?.version || "");
+} catch {}
 
 const app = express();
-const log = createLogger({ service: "sozlesmem" });
 
-// Render/Prod config
-const NODE_ENV = process.env.NODE_ENV || "development";
-const IS_PROD = NODE_ENV === "production";
+// EJS tarafında "cspNonce is not defined" gibi durumlara karşı güvenli varsayılan.
+// Normalde her istek için aşağıdaki middleware nonce üretir ama bu satır
+// (cache/render edge-case'leri dahil) olası bir ReferenceError'ı engeller.
+app.locals.cspNonce = "";
 
-const APP_NAME = process.env.APP_NAME || "Sözleşmem";
+// Küçük ama faydalı: fingerprinting azalır
+app.disable("x-powered-by");
 
-// Render: PORT env’den gelir, host 0.0.0.0 olmalı
-const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || "0.0.0.0";
-
-// View engine
-app.set("views", path.join(__dirname, "views"));
-app.set("view engine", "ejs");
-
-// Trust proxy (Render/Cloudflare vb. reverse proxy için)
+// Reverse proxy (Render/Fly/Nginx) altında doğru protokol/host için
 app.set("trust proxy", 1);
 
-// ----- Global middlewares -----
+// Anti-abuse (in-memory ban):
+// - Rate-limit'e giren veya şüpheli davranan IP'leri geçici olarak banlar.
+// - Bot/scan maliyetini artırır.
+app.use(abuseMiddleware);
 
-app.use(requestIdMiddleware());
+// --- Host allowlist (opsiyonel)
+// Host header injection / open-redirect sınıfı riskleri azaltır.
+// .env: ALLOWED_HOSTS=example.com,www.example.com,localhost
+const _rawAllowedHosts = String(process.env.ALLOWED_HOSTS || "").trim();
+const _allowedHosts = new Set(
+  _rawAllowedHosts
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
 app.use((req, res, next) => {
-  // EJS tarafında kullanılabilir olsun
+  if (_allowedHosts.size === 0) return next();
+  const hostHeader = String(req.headers.host || "").toLowerCase();
+  const hostOnly = hostHeader.split(":")[0];
+
+  // allow either "example.com" or "example.com:3000" if listed
+  const ok = _allowedHosts.has(hostOnly) || _allowedHosts.has(hostHeader);
+  if (!ok) return res.status(400).send("Bad Request");
+  return next();
+});
+
+// HTTP method allowlist (küçük ama etkili: TRACE/CONNECT gibi yöntemleri kapatır)
+const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
+app.use((req, res, next) => {
+  if (!ALLOWED_METHODS.has(req.method)) return res.status(405).send("Method Not Allowed");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  return next();
+});
+
+const PORT = Number.parseInt(process.env.PORT || "3000", 10);
+const HOST = process.env.HOST || "0.0.0.0";
+const APP_NAME = process.env.APP_NAME || "Sözleşmem";
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+
+// Tüm EJS view'lara ortak değişkenler
+app.use((req, res, next) => {
   res.locals.appName = APP_NAME;
+  res.locals.appVersion = APP_VERSION;
   next();
 });
 
-// Basit body limit (DoS azaltır)
-app.use(express.json({ limit: "512kb" }));
-app.use(express.urlencoded({ extended: false, limit: "512kb" }));
-app.use(cookieParser());
-
-// Sıkıştırma
-app.use(compression());
-
-// Host allowlist (isteğe bağlı)
-app.use(allowlistHosts());
-
-// Basit request sanitization
-app.use(sanitizeRequest());
-
-// Bot/agent blocklist
-app.use(blockBadAgents());
-
-// Global rate limit
-app.use(ipRateLimitGlobal);
-
-// Güvenlik header’ları (helmet + custom hardening)
-app.use(
-  helmet({
-    crossOriginEmbedderPolicy: false, // PDF/iframe gibi şeyler için bazen gerekebilir
-  })
-);
-
-// CSP nonce üret (CSP inline script gerekiyorsa)
-app.use((req, res, next) => {
-  // Her response için nonce
-  const nonce = crypto.randomBytes(16).toString("base64");
-  res.locals.cspNonce = nonce;
-
-  // Helmet CSP ile nonce
-  // Not: dynamic nonce için helmet.contentSecurityPolicy’i request bazlı set ediyoruz
-  const csp = helmet.contentSecurityPolicy({
-    useDefaults: true,
-    directives: {
-      defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-      fontSrc: ["'self'", "data:", "https:"],
-      scriptSrc: [
-        "'self'",
-        // nonce
-        `'nonce-${nonce}'`,
-        // iyzico gibi 3rd party script olacaksa domain eklenir (payments sayfasında)
-      ],
-      connectSrc: ["'self'", "https:"],
-      frameAncestors: ["'none'"],
-      baseUri: ["'self'"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: IS_PROD ? [] : null,
-    },
-  });
-
-  csp(req, res, () => next());
-});
-
-// Ek hardening (Referrer-Policy vb.)
-app.use(hardenHeaders());
-
-// Static
-app.use("/public", express.static(path.join(__dirname, "public"), { maxAge: IS_PROD ? "7d" : 0 }));
-
-// CSRF cookie üret (GET’lerde cookie set edebilir)
+// CSRF token cookie (double-submit) – istemcinin POST isteklerinde header ile göndermesi beklenir
 app.use(ensureCsrfCookie);
 
-// ----- Health checks (Render uses /healthz) -----
-app.get("/healthz", (req, res) => {
-  res.status(200).send("ok");
+function isSecureReq(req) {
+  if (req.secure) return true;
+  const xfProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return xfProto === "https";
+}
+
+// --- Startup: ensure temp dirs exist (upload/ocr)
+(async () => {
+  try {
+    await fs.mkdir(path.join(process.cwd(), "tmp_uploads"), { recursive: true });
+
+    // Geçici upload klasörünü güvenli şekilde temizle (crash/yarıda kalma durumları için)
+    const uploadDir = path.join(process.cwd(), "tmp_uploads");
+    const ttlMin = Number(process.env.TMP_UPLOAD_TTL_MIN || 30);
+    const ttlMs = (Number.isFinite(ttlMin) && ttlMin > 0 ? ttlMin : 30) * 60 * 1000;
+    const sweepIntervalMin = Number(process.env.TMP_UPLOAD_SWEEP_MIN || 10);
+    const sweepMs = (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) * 60 * 1000;
+
+    async function sweepTmpUploads() {
+      try {
+        const now = Date.now();
+        const entries = await fs.readdir(uploadDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (!ent.isFile()) continue;
+          const fp = path.join(uploadDir, ent.name);
+          let st;
+          try { st = await fs.stat(fp); } catch { continue; }
+          const age = now - Number(st.mtimeMs || st.ctimeMs || 0);
+          if (age > ttlMs) {
+            try { await fs.unlink(fp); } catch {}
+          }
+        }
+      } catch (e) {
+        logError("tmp_uploads_sweep_failed", e);
+      }
+    }
+
+    // İlk süpürme + periyodik
+    await sweepTmpUploads();
+    const _t = setInterval(sweepTmpUploads, sweepMs);
+    _t.unref?.();
+
+    await fs.mkdir(path.join(process.cwd(), "tmp_ocr"), { recursive: true });
+  } catch (e) {
+    console.warn("⚠️ temp klasörleri oluşturulamadı:", e?.message || e);
+  }
+})();
+
+// --- Request-scoped nonce + request id
+app.use((req, res, next) => {
+  res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+  res.locals.requestId = crypto.randomUUID();
+  res.setHeader("X-Request-Id", res.locals.requestId);
+  next();
 });
 
-// Eski /health endpoint’i de bırakmak istersen:
-app.get("/health", (req, res) => {
-  res.status(200).send("ok");
+// --- Optional: force HTTPS (recommended for public launch)
+// Set FORCE_HTTPS=true on production (Render) once your domain is HTTPS.
+app.use((req, res, next) => {
+  const force = String(process.env.FORCE_HTTPS || "").toLowerCase() === "true";
+  if (!force) return next();
+
+  // Health check endpointleri HTTP üzerinden de çalışabilsin (deploy sırasında timeout riskini azaltır)
+  if (req.path === "/health" || req.path === "/healthz") return next();
+
+  if (isSecureReq(req)) return next();
+  const host = req.get("host");
+  return res.redirect(301, `https://${host}${req.originalUrl}`);
 });
 
-// ----- Payments isolation (iyzico scriptleri daha “saf” alanda) -----
-app.use("/payments", protectPaymentsPage);
+// --- HSTS (yalnızca HTTPS üzerinde anlamlı)
+// .env: HSTS=true
+app.use((req, res, next) => {
+  const enable = String(process.env.HSTS || "").toLowerCase() === "true";
+  if (!enable) return next();
+  if (!isSecureReq(req)) return next();
 
-// ----- API özel rate limitler -----
-app.use("/api/payments", ipRateLimitPayments);
-app.use("/api/analyze-file", ipRateLimitAnalyzeFile);
+  // Preload kullanacaksan: includeSubDomains + uzun max-age gerekir.
+  const preload = String(process.env.HSTS_PRELOAD || "").toLowerCase() === "true";
+  const maxAge = Number(process.env.HSTS_MAX_AGE || 31536000);
+  const parts = [`max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`, "includeSubDomains"];
+  if (preload) parts.push("preload");
+  res.setHeader("Strict-Transport-Security", parts.join("; "));
+  return next();
+});
 
-// Upload guard (dosya tipi/boyut/virüs opsiyonu vb)
-app.use("/api/analyze-file", uploadGuard);
+// --- Security headers (Helmet)
+// CSP is set manually below (nonce-based).
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: "no-referrer" }
+}));
+
+// --- Extra hardened headers (Helmet'in yanında)
+app.use((req, res, next) => {
+  // "Permissions-Policy" ile tarayıcı özelliklerini kapat (saldırı yüzeyi azalır)
+  // payment=() koymak, browser Payment Request API'yi kapatır; iyzico checkout formu bunu kullanmaz.
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), payment=(), interest-cohort=()"
+  );
+  // Kurumsal ortamlarda legacy policy dosyaları üzerinden veri sızması riskini azaltır
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  // Cross-site isolation (modern tarayıcılarda) için süreç izolasyonunu teşvik eder
+  res.setHeader("Origin-Agent-Cluster", "?1");
+  return next();
+});
+
+// --- Nonce-based CSP
+app.use((req, res, next) => {
+  // Her ihtimale karşı: önceki middleware atlandıysa bile nonce üret.
+  const nonce =
+    res.locals.cspNonce ||
+    (res.locals.cspNonce = crypto.randomBytes(16).toString("base64"));
+
+  // Ödeme sayfasında ("/odeme") iyzico checkout scriptleri çalışır.
+  // Uygulama sayfasında bu scriptleri hiç açmayarak saldırı yüzeyini küçültürüz.
+  const isPaymentPage = req.path && String(req.path).startsWith("/odeme");
+
+  // Iyzico embed/scriptler için geniş ama kontrollü izinler:
+  const iyzicoHosts = isPaymentPage ? [
+    "https://*.iyzipay.com",
+    "https://*.iyzico.com"
+  ] : [];
+
+  const parts = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    `form-action 'self' ${iyzicoHosts.join(" ")}`.trim(),
+    `img-src 'self' data: ${iyzicoHosts.join(" ")}`.trim(),
+    "font-src 'self' data:",
+    // inline style attribute kullanıyoruz (EJS/JS). Güvenli tarafta kalmak için şimdilik izinli.
+    "style-src 'self' 'unsafe-inline'",
+    // script nonce ile: XSS'e karşı en güçlü savunmalardan biri
+    `script-src 'self' 'nonce-${nonce}' ${iyzicoHosts.join(" ")}`.trim(),
+    // fetch/XHR/websocket
+    `connect-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
+    // checkout iframe vs.
+    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim()
+  ];
+
+  // HTTPS üstünde mixed-content riskini azaltmak için istersek açarız.
+  // Local dev (http) için varsayılan: kapalı.
+  const upgrade = String(process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")).toLowerCase() === "true";
+  if (upgrade) parts.push("upgrade-insecure-requests");
+
+  res.setHeader("Content-Security-Policy", parts.join("; "));
+  next();
+});
+
+// --- Performance
+app.use(compression());
+app.use("/public", express.static(path.join(__dirname, "public"), {
+  maxAge: "7d",
+  immutable: true
+}));
+
+// --- Rate limiting (API)
+const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
+const max = Number(process.env.RATE_LIMIT_MAX || 80);
+app.use(
+  "/api/",
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { ok: false, error: "Çok fazla istek. Lütfen biraz bekleyin." },
+    handler: rateLimitHandler("api")
+  })
+);
 
 // CSRF doğrulaması (yalnızca state-changing API istekleri)
 app.use("/api", requireCsrf);
 
-// Routes
 app.use("/", routes);
-
-// 404
-app.use((req, res) => {
-  res.status(404);
-  // API ise JSON, değilse EJS
-  if (req.path.startsWith("/api")) {
-    return res.json({ ok: false, error: "Not Found" });
-  }
-  return res.render("404", { title: "Sayfa bulunamadı" });
-});
 
 // Son savunma hattı: beklenmeyen hatalar
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  // Loglarda hassas veri sızmasın: body/metin vb. basma
-  log.error("unhandled_error", {
-    rid: res.locals.requestId,
-    path: req.path,
-    method: req.method,
-    msg: err?.message || "error",
-    // stack prod’da basma (istersen env ile aç)
-    stack: IS_PROD ? undefined : err?.stack,
-  });
-
+  logError("unhandled_error", err, { rid: res.locals.requestId });
   if (res.headersSent) return;
-  res.status(500);
-
-  if (req.path.startsWith("/api")) {
-    return res.json({ ok: false, error: "Sunucu hatası" });
-  }
-  return res.render("500", { title: "Sunucu hatası" });
+  res.status(500).send("Sunucu hatası");
 });
 
-// ----- TEK listen: Render için şart -----
 const server = app.listen(PORT, HOST, () => {
-  const shownHost = HOST === "0.0.0.0" ? "localhost" : HOST;
-  console.log(`✅ ${APP_NAME} çalışıyor: http://${shownHost}:${PORT}`);
+  // Render gibi platformlarda uygulama gerçekte 0.0.0.0:${PORT} üstünden dinler.
+  // Dışarıdan erişim URL’i Render panelinde görünür (https://...onrender.com).
+  console.log(`✅ ${APP_NAME} dinlemede: ${HOST}:${PORT}`);
 });
 
 // Sunucu timeout ayarları (basit DoS dayanımı)
 try {
   server.requestTimeout = Number(process.env.SERVER_REQUEST_TIMEOUT_MS || 60_000);
   server.headersTimeout = Number(process.env.SERVER_HEADERS_TIMEOUT_MS || 65_000);
-  server.keepAliveTimeout = Number(process.env.SERVER_KEEPALIVE_TIMEOUT_MS || 60_000);
-} catch (_) {
-  // ignore
-}
-
-process.on("SIGTERM", () => {
-  server.close(() => process.exit(0));
-});
-process.on("SIGINT", () => {
-  server.close(() => process.exit(0));
-});
+  server.keepAliveTimeout = Number(process.env.SERVER_KEEPALIVE_TIMEOUT_MS || 5_000);
+} catch {}
