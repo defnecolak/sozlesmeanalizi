@@ -10,7 +10,7 @@ const fs = require("fs/promises");
 const { abuseMiddleware, rateLimitHandler } = require("./services/abuse");
 const { ensureCsrfCookie, requireCsrf } = require("./services/csrf");
 
-const { logError, logInfo } = require("./services/logger");
+const { logError } = require("./services/logger");
 
 const routes = require("./routes");
 
@@ -58,8 +58,8 @@ app.use((req, res, next) => {
   return next();
 });
 
-// HTTP method allowlist (küçük ama etkili: TRACE/CONNECT gibi yöntemleri kapatır)
-const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]); 
+// HTTP method allowlist (TRACE/CONNECT gibi yöntemleri kapatır)
+const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
 app.use((req, res, next) => {
   if (!ALLOWED_METHODS.has(req.method)) return res.status(405).send("Method Not Allowed");
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -99,7 +99,10 @@ function isSecureReq(req) {
     const ttlMin = Number(process.env.TMP_UPLOAD_TTL_MIN || 30);
     const ttlMs = (Number.isFinite(ttlMin) && ttlMin > 0 ? ttlMin : 30) * 60 * 1000;
     const sweepIntervalMin = Number(process.env.TMP_UPLOAD_SWEEP_MIN || 10);
-    const sweepMs = (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) * 60 * 1000;
+    const sweepMs =
+      (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) *
+      60 *
+      1000;
 
     async function sweepTmpUploads() {
       try {
@@ -109,10 +112,16 @@ function isSecureReq(req) {
           if (!ent.isFile()) continue;
           const fp = path.join(uploadDir, ent.name);
           let st;
-          try { st = await fs.stat(fp); } catch { continue; }
+          try {
+            st = await fs.stat(fp);
+          } catch {
+            continue;
+          }
           const age = now - Number(st.mtimeMs || st.ctimeMs || 0);
           if (age > ttlMs) {
-            try { await fs.unlink(fp); } catch {}
+            try {
+              await fs.unlink(fp);
+            } catch {}
           }
         }
       } catch (e) {
@@ -139,7 +148,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Optional: force HTTPS (recommended for public launch)
+// --- Optional: force HTTPS
 // Set FORCE_HTTPS=true on production (Render) once your domain is HTTPS.
 app.use((req, res, next) => {
   const force = String(process.env.FORCE_HTTPS || "").toLowerCase() === "true";
@@ -160,10 +169,12 @@ app.use((req, res, next) => {
   if (!enable) return next();
   if (!isSecureReq(req)) return next();
 
-  // Preload kullanacaksan: includeSubDomains + uzun max-age gerekir.
   const preload = String(process.env.HSTS_PRELOAD || "").toLowerCase() === "true";
   const maxAge = Number(process.env.HSTS_MAX_AGE || 31536000);
-  const parts = [`max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`, "includeSubDomains"];
+  const parts = [
+    `max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`,
+    "includeSubDomains",
+  ];
   if (preload) parts.push("preload");
   res.setHeader("Strict-Transport-Security", parts.join("; "));
   return next();
@@ -171,23 +182,21 @@ app.use((req, res, next) => {
 
 // --- Security headers (Helmet)
 // CSP is set manually below (nonce-based).
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  referrerPolicy: { policy: "no-referrer" }
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "no-referrer" },
+  })
+);
 
-// --- Extra hardened headers (Helmet'in yanında)
+// --- Extra hardened headers
 app.use((req, res, next) => {
-  // "Permissions-Policy" ile tarayıcı özelliklerini kapat (saldırı yüzeyi azalır)
-  // payment=() koymak, browser Payment Request API'yi kapatır; iyzico checkout formu bunu kullanmaz.
   res.setHeader(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), payment=(), interest-cohort=()"
   );
-  // Kurumsal ortamlarda legacy policy dosyaları üzerinden veri sızması riskini azaltır
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
-  // Cross-site isolation (modern tarayıcılarda) için süreç izolasyonunu teşvik eder
   res.setHeader("Origin-Agent-Cluster", "?1");
   return next();
 });
@@ -197,14 +206,11 @@ app.use((req, res, next) => {
   const nonce = res.locals.cspNonce;
 
   // Ödeme sayfasında ("/odeme") iyzico checkout scriptleri çalışır.
-  // Uygulama sayfasında bu scriptleri hiç açmayarak saldırı yüzeyini küçültürüz.
   const isPaymentPage = req.path && String(req.path).startsWith("/odeme");
 
-  // Iyzico embed/scriptler için geniş ama kontrollü izinler:
-  const iyzicoHosts = isPaymentPage ? [
-    "https://*.iyzipay.com",
-    "https://*.iyzico.com"
-  ] : [];
+  const iyzicoHosts = isPaymentPage
+    ? ["https://*.iyzipay.com", "https://*.iyzico.com"]
+    : [];
 
   const parts = [
     "default-src 'self'",
@@ -214,19 +220,15 @@ app.use((req, res, next) => {
     `form-action 'self' ${iyzicoHosts.join(" ")}`.trim(),
     `img-src 'self' data: ${iyzicoHosts.join(" ")}`.trim(),
     "font-src 'self' data:",
-    // inline style attribute kullanıyoruz (EJS/JS). Güvenli tarafta kalmak için şimdilik izinli.
     "style-src 'self' 'unsafe-inline'",
-    // script nonce ile: XSS'e karşı en güçlü savunmalardan biri
     `script-src 'self' 'nonce-${nonce}' ${iyzicoHosts.join(" ")}`.trim(),
-    // fetch/XHR/websocket
     `connect-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
-    // checkout iframe vs.
-    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim()
+    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
   ];
 
-  // HTTPS üstünde mixed-content riskini azaltmak için istersek açarız.
-  // Local dev (http) için varsayılan: kapalı.
-  const upgrade = String(process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")).toLowerCase() === "true";
+  const upgrade = String(
+    process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")
+  ).toLowerCase() === "true";
   if (upgrade) parts.push("upgrade-insecure-requests");
 
   res.setHeader("Content-Security-Policy", parts.join("; "));
@@ -235,10 +237,13 @@ app.use((req, res, next) => {
 
 // --- Performance
 app.use(compression());
-app.use("/public", express.static(path.join(__dirname, "public"), {
-  maxAge: "7d",
-  immutable: true
-}));
+app.use(
+  "/public",
+  express.static(path.join(__dirname, "public"), {
+    maxAge: "7d",
+    immutable: true,
+  })
+);
 
 // --- Rate limiting (API)
 const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
@@ -251,7 +256,7 @@ app.use(
     standardHeaders: true,
     legacyHeaders: false,
     message: { ok: false, error: "Çok fazla istek. Lütfen biraz bekleyin." },
-    handler: rateLimitHandler("api")
+    handler: rateLimitHandler("api"),
   })
 );
 
@@ -268,6 +273,7 @@ app.use((err, req, res, next) => {
   res.status(500).send("Sunucu hatası");
 });
 
+// ✅ TEK LİSTEN BURADA OLMALI
 const server = app.listen(PORT, HOST, () => {
   const shownHost = HOST === "0.0.0.0" ? "localhost" : HOST;
   console.log(`✅ ${APP_NAME} çalışıyor: http://${shownHost}:${PORT}`);
