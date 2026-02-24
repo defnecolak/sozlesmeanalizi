@@ -299,7 +299,7 @@ const RULES = [
     "only\\s+the\\s+courts\\s+of\\s+"
   ],
   why: "Yetkili mahkeme uzak bir yerdeyse, hak aramak masraflı ve zor olur.",
-  redLine: "Uzak/yabancı yetki → pratikte dava etmek zorlaşır.",
+  redLine: "Uzak/yabancı yetki: pratikte dava etmek zorlaşır.",
   templates: [
     "Yetkiyi dengeli yap (tarafların yerleşim yeri gibi).",
     "En azından makul bir şehir seç."
@@ -321,7 +321,7 @@ const RULES = [
     "binding\\s+arbitration"
   ],
   why: "Tahkim bazen hızlıdır ama masraflı olabilir; küçük işler için pahalıya gelir.",
-  redLine: "Tahkim masrafı → küçük alacakta hak aramak zorlaşır.",
+  redLine: "Tahkim masrafı: küçük alacakta hak aramak zorlaşır.",
   templates: [
     "Tahkim yerine mahkeme/arab﻿uluculuk seçeneği eklet.",
     "Tahkim yeri, dili ve masraf paylaşımı net olsun."
@@ -342,7 +342,7 @@ const RULES = [
     "email\\s+notice\\s+shall\\s+not\\s+be\\s+valid"
   ],
   why: "Bildirim tek kanala bağlıysa, erişim sorunu yaşarsan hak kaybı olur.",
-  redLine: "Tek kanal → iptal/fesih bildirimini kaçırabilirsin.",
+  redLine: "Tek kanal: iptal/fesih bildirimini kaçırabilirsin.",
   templates: [
     "E-posta gibi alternatif bildirim eklet.",
     "Bildirim alındı teyidi/otomatik onay e-postası iste."
@@ -364,7 +364,7 @@ const RULES = [
     "may\\s+assign\\s+without\\s+consent"
   ],
   why: "Karşı taraf sözleşmeyi iznin olmadan devrederse, muhatabın değişir ve risk artar.",
-  redLine: "Muhatap değişimi → yeni tarafa güvenmek zorunda kalırsın.",
+  redLine: "Muhatap değişimi: yeni tarafa güvenmek zorunda kalırsın.",
   templates: [
     "Devir için yazılı onay şartı iste.",
     "Sadece grup şirketlerine + bildirim şartıyla devredilsin."
@@ -386,7 +386,7 @@ const RULES = [
     "may\\s+use\\s+third\\s+parties"
   ],
   why: "Alt yüklenici kontrolsüzse, kalite ve gizlilik sorunları çıkabilir.",
-  redLine: "Kontrolsüz taşeron → veri/kalite riski.",
+  redLine: "Kontrolsüz taşeron: veri/kalite riski.",
   templates: [
     "Alt yüklenici kullanımı için onayın olsun.",
     "Gizlilik ve sorumluluk taşerona da aynı şekilde uygulansın."
@@ -418,7 +418,7 @@ const RULES = [
     "hammadde"
   ],
   why: "Mücbir sebep çok genişse, normal aksaklıklar bile 'bahane' sayılabilir.",
-  redLine: "Geniş mücbir sebep → gecikmeler normalleşir.",
+  redLine: "Geniş mücbir sebep: gecikmeler normalleşir.",
   templates: [
     "Mücbir sebebi dar tanımla (kontrol dışı, öngörülemez olaylar).",
     "Uzun sürerse fesih ve iade/ödeme haklarını yazdır."
@@ -443,7 +443,7 @@ const RULES = [
     "fees\\s+are\\s+subject\\s+to\\s+change"
   ],
   why: "Ücret tek taraflı artarsa, bütçen bozulur ve sürpriz ödeme çıkabilir.",
-  redLine: "Zam hakkı → ya öde ya vazgeç.",
+  redLine: "Zam hakkı: ya öde ya vazgeç.",
   templates: [
     "Artıştan önce bildirim + cezasız iptal hakkı iste.",
     "Artışa üst sınır veya endeks şartı eklet."
@@ -466,7 +466,7 @@ const RULES = [
     "interest\\s+at\\s+the\\s+rate"
   ],
   why: "Faiz/masraf yüksekse, küçük gecikmede bile borç hızlı büyür.",
-  redLine: "Yüksek faiz → borç şişer.",
+  redLine: "Yüksek faiz: borç şişer.",
   templates: [
     "Faiz oranı açık yazılsın ve üst sınır olsun.",
     "Masraflar makul ve belgeli olsun."
@@ -487,7 +487,7 @@ const RULES = [
     "attorneys'?\\s+fees\\s+shall\\s+be\\s+paid\\s+by"
   ],
   why: "Tüm avukatlık/yargılama gideri sana yüklenirse, hak aramak pahalıya gelir.",
-  redLine: "Masraf baskısı → haklı olsan bile vazgeçebilirsin.",
+  redLine: "Masraf baskısı: haklı olsan bile vazgeçebilirsin.",
   templates: [
     "Giderler mahkeme kararına göre olsun veya dengeli paylaşılsın.",
     "Makul bir üst limit eklet."
@@ -512,7 +512,7 @@ const RULES = [
     "fitness\\s+for\\s+a\\s+particular\\s+purpose"
   ],
   why: "'Olduğu gibi' maddesi çok genişse, eksik/hatalı işte bile hak aramak zorlaşır.",
-  redLine: "As-is → sorun çıksa bile 'kabul ettin' denebilir.",
+  redLine: "As-is: sorun çıksa bile 'kabul ettin' denebilir.",
   templates: [
     "Minimum teslim/performans kriterlerini yazdır.",
     "Sorun olursa düzeltme veya iade/indirim hakkı eklet."

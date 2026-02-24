@@ -167,7 +167,7 @@ if (ev && ev.available && ev.total?.amount) {
   exDays.forEach(d => {
     const p = cancelPct(d);
     if (p == null) return;
-    lines.push(`${d} gün kala: %${p} → ${fmt(total * (p / 100))}`);
+    lines.push(`${d} gün kala: %${p} (${fmt(total * (p / 100))})`);
   });
   if (lines.length) {
     doc.moveDown(0.2);

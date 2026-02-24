@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title><%= appName %></title>
-  <meta name="description" content="Sözleşme yükle → risk sinyallerini gör → PDF rapor indir." />
+  <meta name="description" content="Sözleşme yükle, risk sinyallerini gör, PDF rapor indir." />
   <meta property="og:title" content="<%= appName %>" />
-  <meta property="og:description" content="Sözleşme yükle → riskleri gör → pazarlık metni + PDF rapor." />
+  <meta property="og:description" content="Sözleşme yükle, riskleri gör, pazarlık metni ve PDF rapor al." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="<%= baseUrl %>/uygulama" />
   <meta property="og:image" content="<%= baseUrl %>/public/assets/logo.png" />
@@ -57,7 +57,7 @@
     <div class="pagehead">
       <div>
         <h1>Sözleşme Analizi <span class="muted small appver">v<%= version %></span></h1>
-        <div class="muted">Dosya yükle → risk sinyallerini gör → PDF rapor indir</div>
+        <div class="muted">Dosya yükle • risk sinyallerini gör • PDF rapor indir</div>
       </div>
     </div>
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -236,6 +236,8 @@
     <div>
       <div class="muted small">Gerçek kişi sayısı</div>
       <input class="input" id="actualGuests" type="number" min="0" step="1" />
+	      <input type="range" id="actualGuestsRange" min="0" max="600" value="300" />
+	      <div class="muted small" id="actualGuestsVal">—</div>
       <div class="muted small">Garanti kişi sayısını aşarsan ek maliyet doğabilir.</div>
     </div>
   </div>

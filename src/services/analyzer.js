@@ -102,6 +102,63 @@ function makeSnippet(text, index, length = 220) {
   return prefix + text.slice(start, end).replace(/\s+/g, " ").trim() + suffix;
 }
 
+// Kullanıcı "Metinden alıntı" bölümünde mümkün olduğunca *tam madde/paragraf*
+// görmek ister. Metin çıkarımı (PDF/text) her zaman temiz paragraf sınırları
+// vermediği için best-effort yapıyoruz:
+// - Yakın çevrede çift newline / newline
+// - Varsa "MADDE <no>" başlığını yakala
+// - Çok uzunsa makul bir üst sınırla kes
+function makeClause(text, index, maxLen = 1600) {
+  const t = String(text || "");
+  if (!t) return "";
+  const i = Math.max(0, Math.min(Number(index) || 0, t.length));
+
+  const lookBack = 1800;
+  const winStart = Math.max(0, i - lookBack);
+  const before = t.slice(winStart, i);
+
+  // Paragraf başlangıcı: önce \n\n, yoksa \n
+  let paraStart = before.lastIndexOf("\n\n");
+  if (paraStart >= 0) paraStart = winStart + paraStart + 2;
+  else {
+    const oneNl = before.lastIndexOf("\n");
+    paraStart = oneNl >= 0 ? winStart + oneNl + 1 : winStart;
+  }
+
+  // "MADDE 1" gibi başlık varsa daha geriden başlat (yakın çevrede)
+  const maddeRe = /(^|\n)\s*(MADDE|Madde)\s*\d+[^\n]{0,60}/g;
+  let maddeStart = -1;
+  let m;
+  while ((m = maddeRe.exec(before)) !== null) {
+    maddeStart = winStart + m.index + (m[1] ? m[1].length : 0);
+  }
+
+  const start = maddeStart >= 0 ? Math.min(paraStart, maddeStart) : paraStart;
+
+  const lookFwd = 2400;
+  const winEnd = Math.min(t.length, i + lookFwd);
+  const after = t.slice(i, winEnd);
+
+  // Paragraf bitişi
+  let paraEndRel = after.indexOf("\n\n");
+  if (paraEndRel < 0) paraEndRel = after.indexOf("\n");
+  let end = paraEndRel >= 0 ? i + paraEndRel : winEnd;
+
+  // Bir sonraki MADDE başlığı varsa orada kes
+  const nextMadde = after.match(/\n\s*(MADDE|Madde)\s*\d+/);
+  if (nextMadde && typeof nextMadde.index === "number") {
+    end = Math.min(end, i + nextMadde.index);
+  }
+
+  if (end - start > maxLen) {
+    end = Math.min(t.length, start + maxLen);
+  }
+
+  let out = t.slice(start, end).trim();
+  out = out.replace(/\t+/g, " ").replace(/[ \u00a0]+/g, " ");
+  return out;
+}
+
 
 function formatMoney(amount, currency = "EUR") {
   const n = Number(amount);
@@ -146,7 +203,7 @@ function computeMoneyImpact(issue, ctx) {
       if (range && total) {
         const minAmt = total * (range.min / 100);
         const maxAmt = total * (range.max / 100);
-        return `İptal/cezai şart: %${range.min}–%${range.max} → ${formatMoney(minAmt, currency)} – ${formatMoney(maxAmt, currency)} (Toplam: ${formatMoney(total, currency)})`;
+        return `İptal/cezai şart (%${range.min}–%${range.max}): ${formatMoney(minAmt, currency)} – ${formatMoney(maxAmt, currency)} (Toplam: ${formatMoney(total, currency)})`;
       }
       return defaultEvent;
     }
@@ -162,7 +219,7 @@ function computeMoneyImpact(issue, ctx) {
       if (rate != null) {
         const sampleBase = 10000;
         const interest = sampleBase * (rate / 100);
-        return `Temerrüt faizi: aylık %${String(rate).replace(".", ",")} → ${formatMoney(sampleBase, currency)} gecikmede ≈ ${formatMoney(interest, currency)}/ay (örnek)`;
+        return `Temerrüt faizi (aylık %${String(rate).replace(".", ",")}): ${formatMoney(sampleBase, currency)} gecikmede ≈ ${formatMoney(interest, currency)}/ay (örnek)`;
       }
       return defaultEvent;
     }
@@ -174,12 +231,12 @@ function computeMoneyImpact(issue, ctx) {
     }
 
     if (id === "unlimited_liability") {
-      if (total) return `Sorumluluk sınırı yok → toplam bedeli (${formatMoney(total, currency)}) aşan tazminat riski olabilir`;
+      if (total) return `Sorumluluk sınırı yoksa, toplam bedeli (${formatMoney(total, currency)}) aşan tazminat riski olabilir`;
       return defaultEvent;
     }
 
     if (id === "unilateral_price_increase") {
-      return "Kur/KDV/ekstra ücret → toplam artabilir (net değil)";
+      return "Kur/KDV/ekstra ücret nedeniyle toplam artabilir (net değil)";
     }
 
     // Other event-pack hits
@@ -223,6 +280,7 @@ function analyzeContract(rawText, opts = {}) {
           index: m.index,
           clause: clauseLabel,
           snippet: makeSnippet(text, m.index),
+          quote: makeClause(text, m.index),
           why: rule.why,
           redLine: rule.redLine || null,
           templates: rule.templates || []
@@ -257,6 +315,8 @@ function analyzeContract(rawText, opts = {}) {
         clause: it.clause,
         match: it.match,
         snippet: it.snippet,
+        // UI'da "Metinden alıntı" alanında daha uzun/komple madde göstermek için
+        quote: it.quote || "",
         why: it.why,
         redLine: it.redLine || null,
         templates: it.templates || [],
@@ -270,7 +330,7 @@ function analyzeContract(rawText, opts = {}) {
     g.occurrences += 1;
     g.minIndex = Math.min(g.minIndex, it.index);
     if (g.examples.length < 3) {
-      g.examples.push({ clause: it.clause, match: it.match, snippet: it.snippet });
+      g.examples.push({ clause: it.clause, match: it.match, snippet: it.snippet, quote: it.quote || "" });
     }
   }
 

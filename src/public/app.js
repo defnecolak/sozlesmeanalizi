@@ -87,7 +87,10 @@ const simCard = $("simCard");
 const simSummary = $("simSummary");
 const cancelDays = $("cancelDays");
 const cancelDaysVal = $("cancelDaysVal");
+const guaranteeGuests = $("guaranteeGuests");
 const actualGuests = $("actualGuests");
+const actualGuestsRange = $("actualGuestsRange");
+const actualGuestsVal = $("actualGuestsVal");
 const cancelResult = $("cancelResult");
 const guestResult = $("guestResult");
 
@@ -784,15 +787,47 @@ function renderSimulation(simulation) {
 
   if (!__simBound) {
     cancelDays?.addEventListener("input", () => updateSim(ev));
+    cancelDays?.addEventListener("change", () => updateSim(ev));
+
+    guaranteeGuests?.addEventListener("input", () => updateSim(ev));
+    guaranteeGuests?.addEventListener("change", () => updateSim(ev));
+
     actualGuests?.addEventListener("input", () => updateSim(ev));
+    actualGuests?.addEventListener("change", () => updateSim(ev));
+
+    actualGuestsRange?.addEventListener("input", () => {
+      if (actualGuests) actualGuests.value = String(actualGuestsRange.value || "0");
+      updateSim(ev);
+    });
+    actualGuestsRange?.addEventListener("change", () => {
+      if (actualGuests) actualGuests.value = String(actualGuestsRange.value || "0");
+      updateSim(ev);
+    });
+
     __simBound = true;
   }
 
   // defaults
-  if (actualGuests && ev.guarantee && !actualGuests.value) actualGuests.value = String(ev.guarantee);
+  if (guaranteeGuests && ev.guarantee && !guaranteeGuests.value) guaranteeGuests.value = String(ev.guarantee);
+  if (actualGuests) {
+    const defA = ev.actual ?? ev.guarantee ?? 0;
+    if (!actualGuests.value) actualGuests.value = String(defA);
+  }
+  if (actualGuestsRange) {
+    const defA = ev.actual ?? ev.guarantee ?? 0;
+    if (!actualGuestsRange.value) actualGuestsRange.value = String(defA);
+  }
   if (cancelDays && !cancelDays.value) cancelDays.value = "60";
 
   updateSim(ev);
+}
+
+function guestRangeMax(guarantee, actual) {
+  const g = Math.max(0, Number(guarantee) || 0);
+  const a = Math.max(0, Number(actual) || 0);
+  const headroom = Math.max(50, Math.round(g * 0.5));
+  const max = Math.max(100, a + headroom, g + headroom, g * 2);
+  return Math.min(max, 5000);
 }
 
 function updateSim(ev) {
@@ -820,7 +855,7 @@ function updateSim(ev) {
       cancelResult.textContent = "İptal tablosu metinden net çıkarılamadı.";
     } else {
       cancelResult.innerHTML = `
-        <div><b>İptal bedeli:</b> %${pct} → ${formatMoney(fee, currency)}</div>
+        <div><b>İptal bedeli:</b> %${pct} (${formatMoney(fee, currency)})</div>
         <div><b>Bu tarihe kadar ödenmiş taksitler:</b> ${formatMoney(paid, currency)}</div>
         <div><b>Ek ödenmesi muhtemel tutar:</b> ${formatMoney(addl, currency)}</div>
         <div class="muted small" style="margin-top:6px">
@@ -831,8 +866,21 @@ function updateSim(ev) {
   }
 
   // Guest sim
-  const guarantee = Number(ev.guarantee || 0);
-  const actual = Number(actualGuests?.value || 0);
+  const guarantee = guaranteeGuests?.value
+    ? Number(guaranteeGuests.value)
+    : Number(ev.guarantee || 0);
+  const actual = actualGuests?.value === "" ? guarantee : Number(actualGuests?.value || 0);
+
+  // Slider/UI senkronu
+  if (actualGuestsVal) {
+    actualGuestsVal.textContent = `Seçili kişi sayısı: ${Number.isFinite(actual) ? actual : 0}`;
+  }
+  if (actualGuestsRange) {
+    const max = guestRangeMax(guarantee, actual);
+    actualGuestsRange.min = "0";
+    actualGuestsRange.max = String(max);
+    actualGuestsRange.value = String(Math.min(Math.max(0, Number.isFinite(actual) ? actual : 0), max));
+  }
   const perPerson = Number(ev.perPersonVatIncl || ev.perPersonFromTotal || 0);
   const extra = Math.max(0, actual - guarantee);
   const extraCost = (extra > 0 && perPerson > 0) ? (extra * perPerson) : 0;
@@ -842,7 +890,7 @@ function updateSim(ev) {
       guestResult.textContent = "Garanti kişi sayısı çıkarılamadı.";
     } else {
       guestResult.innerHTML = `
-        <div><b>Garanti:</b> ${guarantee} • <b>Gerçek:</b> ${actual || guarantee}</div>
+      <div><b>Garanti:</b> ${Number.isFinite(guarantee) ? guarantee : 0} • <b>Gerçek:</b> ${Number.isFinite(actual) ? actual : 0}</div>
         <div><b>Ek kişi:</b> ${extra}</div>
         <div><b>Ek maliyet (yaklaşık):</b> ${formatMoney(extraCost, currency)}</div>
         <div class="muted small" style="margin-top:6px">
@@ -1072,7 +1120,8 @@ function renderSoft(items) {
 
 function renderIssueCard(it) {
   const idEsc = escapeHtml(it.id || "");
-  const snippet = highlightSnippet(it.snippet || "", it.match || "");
+  // "Metinden alıntı" panelinde mümkün olduğunca tam madde/paragraf göster.
+  const snippet = highlightSnippet(it.quote || it.snippet || "", it.match || "");
 
   const occ = (it.occurrences && Number(it.occurrences) > 1)
     ? `Geçen yer: ${Number(it.occurrences)}`
@@ -1518,6 +1567,9 @@ btnNegCopy?.addEventListener("click", async () => {
   const txt = String(negText?.value || "").trim();
   if (!txt) { alert("Kopyalanacak metin yok."); return; }
   const ok = await copyTextToClipboard(txt);
+  const old = btnNegCopy.textContent;
+  btnNegCopy.textContent = ok ? 'Kopyalandı ✅' : 'Kopyalanamadı';
+  setTimeout(() => { btnNegCopy.textContent = old; }, 900);
   if (!ok) window.prompt("Metni kopyalayamadım. Ctrl+C ile kopyala:", txt);
 });
 

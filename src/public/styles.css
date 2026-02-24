@@ -751,6 +751,15 @@ mark{
   line-height:1.35;
 }
 
+/* Alıntı alanı: newline'ları koru (tam madde/paragraf daha okunur) */
+.quote-text{ white-space: pre-wrap; }
+
+/* Kişi sayısı slider'ı */
+input[type="range"]{
+  width:100%;
+  margin-top:10px;
+}
+
 .item-actions{
   margin-top:10px;
   display:flex;
@@ -822,12 +831,12 @@ mark{
 .item-details summary::-webkit-details-marker{ display:none; }
 
 .item-details summary::before{
-  content: "▸";
+  content: "+";
   display:inline-block;
   opacity:0.85;
 }
 
-.item-details[open] summary::before{ content: "▾"; }
+.item-details[open] summary::before{ content: "−"; }
 
 .item-details .details-body{ margin-top:10px; }
 
@@ -851,13 +860,13 @@ mark{
 .history-details summary::-webkit-details-marker{ display:none; }
 
 .history-details summary::before{
-  content: "▸";
+  content: "+";
   display:inline-block;
   margin-right:8px;
   opacity:0.85;
 }
 
-.history-details[open] summary::before{ content: "▾"; }
+.history-details[open] summary::before{ content: "−"; }
 
 
 
