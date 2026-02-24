@@ -285,8 +285,15 @@ function negotiationLines(it) {
   lines.push(`Sözleşmedeki “${title}”${clause} maddesi için küçük bir revize rica edeceğim.`);
   lines.push(`Kısaca: ${why}`);
   if (money) lines.push(`Parasal etki (tahmini): ${money}`);
-  lines.push("Rica ettiğim güncelleme:");
-  asks.forEach((t) => lines.push(`• ${truncate(t, 240)}.`));
+  const askSentences = asks
+    .map((t) => {
+      const s = truncate(t, 240).trim();
+      if (!s) return "";
+      return /[.!?…]$/.test(s) ? s : `${s}.`;
+    })
+    .filter(Boolean)
+    .join(" ");
+  lines.push(`Rica ettiğim güncelleme: ${askSentences}`);
   lines.push("Uygunsa buna göre güncelleyebilir miyiz?");
   lines.push("Teşekkürler.");
   return lines;

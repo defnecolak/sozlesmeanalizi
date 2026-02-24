@@ -33,7 +33,9 @@
 <body>
   <header class="topnav">
     <div class="topnav-inner">
-      <a class="topnav-brand" href="/">
+        <!-- / ana sayfa bazı kullanıcıları "under construction" sayfasına götürebiliyor.
+             Uygulama içinde kalmak için logoyu /uygulama'ya yönlendiriyoruz. -->
+        <a class="topnav-brand" href="/uygulama">
         <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
         <span class="topnav-name"><%= appName %></span>
       </a>
@@ -158,8 +160,6 @@
       <div class="result-top">
         <div>
           <h2>Sonuç</h2>
-          <div class="muted small" id="metaLine">—</div>
-          <div class="muted small" id="qualityLine">—</div>
         </div>
         <div class="result-actions">
           <% if (paywallMode === "on") { %>

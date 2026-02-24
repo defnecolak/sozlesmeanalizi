@@ -989,14 +989,19 @@ function renderAll(analysis, extracted) {
   riskLevelEl.textContent = `Seviye: ${s.riskLevel}`;
   riskLevelEl.className = pillColorClass(s.riskLevelColor);
 
-  metaLine.textContent = `Analiz: ${new Date(m.analyzedAt).toLocaleString()} • Rol: ${roleLabel(s.role)}`;
+  if (metaLine) {
+    metaLine.textContent = `Analiz: ${new Date(m.analyzedAt).toLocaleString()} • Rol: ${roleLabel(s.role)}`;
+  }
 
+
+  if (qualityLine) {
   if (extracted?.quality?.label) {
     qualityLine.textContent = `Metin Kalitesi: ${extracted.quality.label} (${extracted.quality.score}/100)`;
   } else if (s.quality?.label) {
     qualityLine.textContent = `Metin Kalitesi: ${s.quality.label} (${s.quality.score}/100)`;
   } else {
     qualityLine.textContent = "—";
+  }
   }
 
   issueCountEl.textContent = `${s.issueCount}`;
@@ -1098,9 +1103,10 @@ function renderSoft(items) {
       ? `<div class="item-meta">${metaParts.map(p => `<span class="meta-pill">${p}</span>`).join("")}</div>`
       : "";
 
-    const bullets = [];
-    if (it.why) bullets.push(`<li><span class="b-label">Kısaca:</span>${escapeHtml(it.why)}</li>`);
-    const summaryHtml = bullets.length ? `<ul class="bullets">${bullets.join("")}</ul>` : "";
+    // “Kısaca:” gibi etiketler yerine doğrudan cümle göster (daha profesyonel görünür).
+    const summaryHtml = it.why
+      ? `<div class="risk-sentences"><p>${escapeHtml(it.why)}</p></div>`
+      : "";
 
     const askHtml = (it.templates && it.templates.length)
       ? `<div class="section"><div class="section-title">Ne yapabilirsin?</div><ul class="bullets">${it.templates.map(t => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
@@ -1136,12 +1142,12 @@ function renderIssueCard(it) {
     ? `<div class="item-meta">${metaParts.map(p => `<span class="meta-pill">${p}</span>`).join("")}</div>`
     : "";
 
-  // Daha sade ilk görünüm: sadece kısa özet + en fazla 2 öneri
-  const summaryBullets = [];
-  if (it.why) summaryBullets.push(`<li><span class="b-label">Kısaca:</span>${escapeHtml(it.why)}</li>`);
-  if (it.redLine) summaryBullets.push(`<li><span class="b-label">Dikkat:</span>${escapeHtml(it.redLine)}</li>`);
-  const summaryHtml = summaryBullets.length
-    ? `<ul class="bullets">${summaryBullets.join("")}</ul>`
+  // “Kısaca:” / “Dikkat:” etiketlerini kaldır: doğrudan cümle olarak yaz.
+  const summarySentences = [];
+  if (it.why) summarySentences.push(`<p>${escapeHtml(it.why)}</p>`);
+  if (it.redLine) summarySentences.push(`<p>${escapeHtml(it.redLine)}</p>`);
+  const summaryHtml = summarySentences.length
+    ? `<div class="risk-sentences">${summarySentences.join("")}</div>`
     : "";
 
   const allTemplates = Array.isArray(it.templates) ? it.templates : [];
@@ -1369,16 +1375,25 @@ function buildNegotiationForIssue(it, opts = {}) {
 
   const asks = (templates.length ? templates.slice(0, 3) : [
     "Bu maddeyi daha net ve dengeli olacak şekilde revize edelim"
-  ]).map(t => `- ${t}.`);
+  ])
+    .map((t) => {
+      const s = String(t || "")
+        .trim()
+        // Şablonlarda bazen liste işaretleri kalıyor; düz metne çeviriyoruz.
+        .replace(/^\s*[-*•]\s+/, "");
+      if (!s) return "";
+      return /[.!?…]$/.test(s) ? s : `${s}.`;
+    })
+    .filter(Boolean);
 
   let out = "";
   if (includeGreeting) out += "Merhaba,\n\n";
 
   // Gönderime hazır, daha doğal bir metin
   out += `Sözleşmedeki “${title}”${clause} maddesi için küçük bir revize rica edeceğim.\n\n`;
-  out += `Kısaca: ${why}\n`;
-  if (money) out += `Parasal etki (tahmini): ${money}\n`;
-  out += `\nRica ettiğim güncelleme:\n${asks.join("\n")}`;
+  out += `${why}\n`;
+  if (money) out += `Bu maddenin tahmini parasal etkisi ${money}.\n`;
+  out += `\nUygunsa şu revizeyi rica ediyorum. ${asks.join(" ")}`;
 
   if (includeClosing) {
     out += "\n\nUygunsa buna göre güncelleyebilir miyiz?\nTeşekkürler.";

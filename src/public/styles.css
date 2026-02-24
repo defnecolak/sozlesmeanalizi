@@ -571,6 +571,16 @@ input[type="file"]{
   font-weight:900;
   margin-right:6px;
 }
+
+/* Etiketli bullet yerine daha temiz paragraf akışı */
+.risk-sentences{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.risk-sentences p{ margin:0; line-height:1.35; }
 .k{color: var(--muted); font-weight:700}
 .kv{margin-top:8px; display:flex; flex-direction:column; gap:6px}
 .why, .sug{

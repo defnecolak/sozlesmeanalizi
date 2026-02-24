@@ -55,7 +55,9 @@ function roleMultiplier(rule, role) {
 function packFactor(pack) {
   const p = (pack || "genel").toString();
   // Bazı sözleşme türlerinde (ör. etkinlik/mekan) standart şartlar daha fazla olduğu için skoru biraz yumuşatıyoruz.
-  if (p === "etkinlik") return 2.10;
+  // Etkinlik/düğün sözleşmeleri: yüksek risk maddeleri çok sık “şablon” olarak geliyor.
+  // Aynı uyarıları göstermek isteriz ama skoru daha az agresif yapalım.
+  if (p === "etkinlik") return 3.00;
   if (p === "kira") return 1.20;
   if (p === "saas") return 1.15;
   if (p === "hizmet") return 1.10;
@@ -72,10 +74,23 @@ function packFactor(pack) {
   return 1.0;
 }
 
-function scoreFromPoints(points, pack) {
-  const k = 95 * packFactor(pack);
-  const p = Math.max(0, Number(points || 0));
-  return Math.round(Math.min(100, Math.max(0, 100 * (1 - Math.exp(-p / k)))));
+function scoreFromPoints(points, pack, riskCount = 0, softCount = 0) {
+  // Puanları 0-100'e çevirirken iki şeyi dengeleriz:
+  // 1) Ham puan (ağırlıklar) → daha fazla puan daha yüksek risk
+  // 2) Yoğunluk → az sayıda maddeyle yüksek skor çıkmasını biraz yumuşat
+  //
+  // Not: Bu bir "hukuki kesinlik" değil; kullanıcıya okunabilir bir özet skor.
+  const k = 130 * packFactor(pack); // önceki 95 biraz agresifti
+  const raw = 100 * (1 - Math.exp(-(Number(points || 0) / k)));
+
+  const countEff = Math.max(
+    0,
+    Number(riskCount || 0) + Number(softCount || 0) * 0.35
+  );
+  const density = 0.75 + 0.25 * (1 - Math.exp(-(countEff / 6)));
+
+  const adjusted = raw * density;
+  return Math.max(0, Math.min(100, Math.round(adjusted)));
 }
 
 function occurrenceMultiplier(cnt, pack) {
@@ -108,12 +123,16 @@ function makeSnippet(text, index, length = 220) {
 // - Yakın çevrede çift newline / newline
 // - Varsa "MADDE <no>" başlığını yakala
 // - Çok uzunsa makul bir üst sınırla kes
-function makeClause(text, index, maxLen = 1600) {
+// Metinden “madde/parağraf” çıkarma: kullanıcılar genelde "bütün maddeyi" görmek istiyor.
+// PDF → metin dönüşümlerinde satır kırılımları çok oynak olduğu için tek satır newline
+// ile kesmek alıntıyı çoğu zaman yarım bırakıyor. Bu yüzden daha geniş bir pencere
+// ve daha “akıllı” bitiş kriterleri kullanıyoruz.
+function makeClause(text, index, maxLen = 7000) {
   const t = String(text || "");
   if (!t) return "";
   const i = Math.max(0, Math.min(Number(index) || 0, t.length));
 
-  const lookBack = 1800;
+  const lookBack = Math.max(maxLen, 6000);
   const winStart = Math.max(0, i - lookBack);
   const before = t.slice(winStart, i);
 
@@ -135,14 +154,15 @@ function makeClause(text, index, maxLen = 1600) {
 
   const start = maddeStart >= 0 ? Math.min(paraStart, maddeStart) : paraStart;
 
-  const lookFwd = 2400;
+  const lookFwd = Math.max(maxLen, 6000);
   const winEnd = Math.min(t.length, i + lookFwd);
   const after = t.slice(i, winEnd);
 
-  // Paragraf bitişi
-  let paraEndRel = after.indexOf("\n\n");
-  if (paraEndRel < 0) paraEndRel = after.indexOf("\n");
-  let end = paraEndRel >= 0 ? i + paraEndRel : winEnd;
+  // Bitiş: öncelik sırası
+  // 1) bir sonraki “MADDE <no>” başlığı
+  // 2) paragraf sonu (çift newline)
+  // 3) yoksa pencere sonu
+  let end = winEnd;
 
   // Bir sonraki MADDE başlığı varsa orada kes
   const nextMadde = after.match(/\n\s*(MADDE|Madde)\s*\d+/);
@@ -150,9 +170,13 @@ function makeClause(text, index, maxLen = 1600) {
     end = Math.min(end, i + nextMadde.index);
   }
 
-  if (end - start > maxLen) {
-    end = Math.min(t.length, start + maxLen);
+  const paraEndRel = after.indexOf("\n\n");
+  if (paraEndRel >= 0) {
+    end = Math.min(end, i + paraEndRel);
   }
+
+  if (end < start) end = Math.min(t.length, start + maxLen);
+  if (end - start > maxLen) end = Math.min(t.length, start + maxLen);
 
   let out = t.slice(start, end).trim();
   out = out.replace(/\t+/g, " ").replace(/[ \u00a0]+/g, " ");
@@ -438,7 +462,7 @@ if (hasConf && !hasConfExceptions) {
     it.scorePoints = Number(rulePointsById[it.id] || 0);
   }
 
-  const riskScore = scoreFromPoints(riskPoints, pack);
+  const riskScore = scoreFromPoints(riskPoints, pack, groupedIssues.length, softWarnings.length);
   const levelInfo = getLevelFromScore(riskScore);
 
   groupedIssues.sort((a, b) => {
