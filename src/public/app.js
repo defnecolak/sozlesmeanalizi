@@ -865,6 +865,23 @@ function roleLabel(role) {
   }
 }
 
+function packLabel(pack) {
+  switch (pack) {
+    case "genel": return "Genel";
+    case "satis": return "Satış/Alım";
+    case "kira": return "Kira";
+    case "hizmet": return "Hizmet";
+    case "is": return "İş";
+    case "nda": return "NDA/Gizlilik";
+    case "freelance": return "Freelance";
+    case "saas": return "SaaS Abonelik";
+    case "etkinlik": return "Düğün/Etkinlik";
+    case "influencer": return "Influencer";
+    default: return pack || "Genel";
+  }
+}
+
+
 function renderScoreExplain(summary) {
   const ex = summary?.scoreExplain || null;
 

@@ -161,6 +161,22 @@ async function main() {
     ok(`/api/analyze-demo OK (riskScore=${demoAnalysis?.summary?.riskScore ?? "?"})`);
   }
 
+
+  // 4b) Pack allowlist sanity (UI: "Düğün/Etkinlik" = etkinlik). 
+  // Bu test, pack'in sessizce "genel"e düşmesini (skoru şişiren) hataları yakalar.
+  {
+    const body = JSON.stringify({ role: "genel", pack: "etkinlik" });
+    const { res, json, text } = await fetchJson(`${BASE_URL}/api/analyze-demo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body
+    });
+    if (!res.ok) fail("/api/analyze-demo (pack=etkinlik) HTTP " + res.status, text);
+    const usedPack = json?.analysis?.summary?.pack;
+    if (usedPack !== "etkinlik") fail(`pack allowlist kırık (beklenen etkinlik, gelen ${usedPack})`, text);
+    ok(`/api/analyze-demo OK (pack=${usedPack})`);
+  }
+
   // 5) Analyze file upload (may be gated by credits; in that case we only warn)
   let fileAnalysis = null;
   let fileText = null;

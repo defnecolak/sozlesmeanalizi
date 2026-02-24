@@ -274,13 +274,21 @@ const ROLE_IDS = new Set(ROLES.map(r => r.id));
 
 // Pack id'leri UI ile senkron: burada allowlist kullanıyoruz (injection / hatalı input'a karşı).
 const PACK_IDS = new Set([
+  // UI ile senkron olmalı (src/views/app.ejs)
   "genel",
-  "hizmet",
-  "kira",
-  "alis",
   "satis",
+  "kira",
+  "hizmet",
+  "is",
+  "nda",
+  "freelance",
+  "saas",
+  "etkinlik",
+  "influencer",
+
+  // Geriye dönük/alternatif isimler (opsiyonel uyumluluk)
   "dugun",
-  "is"
+  "alis",
 ]);
 
 function sanitizeRole(v) {
@@ -289,7 +297,11 @@ function sanitizeRole(v) {
 }
 
 function sanitizePack(v) {
-  const s = String(v || "genel").trim().toLowerCase();
+  const s = String(v || "").trim().toLowerCase();
+  if (!s) return "genel";
+  // Aliaslar (geriye dönük uyum)
+  if (s === "dugun") return "etkinlik";
+  if (s === "alis") return "satis";
   return PACK_IDS.has(s) ? s : "genel";
 }
 

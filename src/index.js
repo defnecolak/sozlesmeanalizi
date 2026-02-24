@@ -4,7 +4,6 @@ if (process.env.NODE_ENV !== "production") {
   // eslint-disable-next-line global-require
   require("dotenv").config();
 }
-
 const express = require("express");
 const helmet = require("helmet");
 const path = require("path");
@@ -15,12 +14,15 @@ const fs = require("fs/promises");
 
 const { abuseMiddleware, rateLimitHandler } = require("./services/abuse");
 const { ensureCsrfCookie, requireCsrf } = require("./services/csrf");
+
 const { logError } = require("./services/logger");
+
 const routes = require("./routes");
 
-// View'larda sürüm göstermek için
+// View'larda sürüm göstermek (ve bazı template hatalarını önlemek) için
 let APP_VERSION = "";
 try {
+  // src/ altından kök package.json
   // eslint-disable-next-line import/no-dynamic-require, global-require
   const pkg = require("../package.json");
   APP_VERSION = String(pkg?.version || "");
@@ -28,20 +30,25 @@ try {
 
 const app = express();
 
-// EJS tarafında “cspNonce is not defined” edge-case’lerine karşı
+// EJS tarafında "cspNonce is not defined" gibi durumlara karşı güvenli varsayılan.
+// Normalde her istek için aşağıdaki middleware nonce üretir ama bu satır
+// (cache/render edge-case'leri dahil) olası bir ReferenceError'ı engeller.
 app.locals.cspNonce = "";
 
-// Fingerprinting azalt
+// Küçük ama faydalı: fingerprinting azalır
 app.disable("x-powered-by");
 
-// Render / reverse-proxy için gerekli (req.ip, req.secure vs.)
+// Reverse proxy (Render/Fly/Nginx) altında doğru protokol/host için
 app.set("trust proxy", 1);
 
-// Anti-abuse (in-memory ban / bad actor throttling)
+// Anti-abuse (in-memory ban):
+// - Rate-limit'e giren veya şüpheli davranan IP'leri geçici olarak banlar.
+// - Bot/scan maliyetini artırır.
 app.use(abuseMiddleware);
 
 // --- Host allowlist (opsiyonel)
-// .env: ALLOWED_HOSTS=sozlesmeanalizi.com,www.sozlesmeanalizi.com,sozlesmeanalizi.onrender.com
+// Host header injection / open-redirect sınıfı riskleri azaltır.
+// .env: ALLOWED_HOSTS=example.com,www.example.com,localhost
 const _rawAllowedHosts = String(process.env.ALLOWED_HOSTS || "").trim();
 const _allowedHosts = new Set(
   _rawAllowedHosts
@@ -52,17 +59,17 @@ const _allowedHosts = new Set(
 
 app.use((req, res, next) => {
   if (_allowedHosts.size === 0) return next();
-
   const hostHeader = String(req.headers.host || "").toLowerCase();
   const hostOnly = hostHeader.split(":")[0];
 
+  // allow either "example.com" or "example.com:3000" if listed
   const ok = _allowedHosts.has(hostOnly) || _allowedHosts.has(hostHeader);
   if (!ok) return res.status(400).send("Bad Request");
   return next();
 });
 
-// HTTP method allowlist (TRACE/CONNECT kapalı)
-const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]);
+// HTTP method allowlist (küçük ama etkili: TRACE/CONNECT gibi yöntemleri kapatır)
+const ALLOWED_METHODS = new Set(["GET", "POST", "HEAD", "OPTIONS"]); 
 app.use((req, res, next) => {
   if (!ALLOWED_METHODS.has(req.method)) return res.status(405).send("Method Not Allowed");
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -70,21 +77,20 @@ app.use((req, res, next) => {
 });
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
-// Render’da HOST vermesen de olur; 0.0.0.0 güvenli default
 const HOST = process.env.HOST || "0.0.0.0";
 const APP_NAME = process.env.APP_NAME || "Sözleşmem";
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// Tüm EJS view’lara ortak değişkenler
+// Tüm EJS view'lara ortak değişkenler
 app.use((req, res, next) => {
   res.locals.appName = APP_NAME;
   res.locals.appVersion = APP_VERSION;
   next();
 });
 
-// CSRF token cookie (double-submit)
+// CSRF token cookie (double-submit) – istemcinin POST isteklerinde header ile göndermesi beklenir
 app.use(ensureCsrfCookie);
 
 function isSecureReq(req) {
@@ -93,21 +99,17 @@ function isSecureReq(req) {
   return xfProto === "https";
 }
 
-// --- Startup: temp klasörlerini hazırla + periyodik temizle
+// --- Startup: ensure temp dirs exist (upload/ocr)
 (async () => {
   try {
-    const uploadDir = path.join(process.cwd(), "tmp_uploads");
-    await fs.mkdir(uploadDir, { recursive: true });
-    await fs.mkdir(path.join(process.cwd(), "tmp_ocr"), { recursive: true });
+    await fs.mkdir(path.join(process.cwd(), "tmp_uploads"), { recursive: true });
 
+    // Geçici upload klasörünü güvenli şekilde temizle (crash/yarıda kalma durumları için)
+    const uploadDir = path.join(process.cwd(), "tmp_uploads");
     const ttlMin = Number(process.env.TMP_UPLOAD_TTL_MIN || 30);
     const ttlMs = (Number.isFinite(ttlMin) && ttlMin > 0 ? ttlMin : 30) * 60 * 1000;
-
     const sweepIntervalMin = Number(process.env.TMP_UPLOAD_SWEEP_MIN || 10);
-    const sweepMs =
-      (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) *
-      60 *
-      1000;
+    const sweepMs = (Number.isFinite(sweepIntervalMin) && sweepIntervalMin > 0 ? sweepIntervalMin : 10) * 60 * 1000;
 
     async function sweepTmpUploads() {
       try {
@@ -117,16 +119,10 @@ function isSecureReq(req) {
           if (!ent.isFile()) continue;
           const fp = path.join(uploadDir, ent.name);
           let st;
-          try {
-            st = await fs.stat(fp);
-          } catch {
-            continue;
-          }
+          try { st = await fs.stat(fp); } catch { continue; }
           const age = now - Number(st.mtimeMs || st.ctimeMs || 0);
           if (age > ttlMs) {
-            try {
-              await fs.unlink(fp);
-            } catch {}
+            try { await fs.unlink(fp); } catch {}
           }
         }
       } catch (e) {
@@ -134,9 +130,12 @@ function isSecureReq(req) {
       }
     }
 
+    // İlk süpürme + periyodik
     await sweepTmpUploads();
-    const t = setInterval(sweepTmpUploads, sweepMs);
-    t.unref?.();
+    const _t = setInterval(sweepTmpUploads, sweepMs);
+    _t.unref?.();
+
+    await fs.mkdir(path.join(process.cwd(), "tmp_ocr"), { recursive: true });
   } catch (e) {
     console.warn("⚠️ temp klasörleri oluşturulamadı:", e?.message || e);
   }
@@ -150,12 +149,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- FORCE_HTTPS (custom domain HTTPS hazır olunca aç)
+// --- Optional: force HTTPS (recommended for public launch)
+// Set FORCE_HTTPS=true on production (Render) once your domain is HTTPS.
 app.use((req, res, next) => {
   const force = String(process.env.FORCE_HTTPS || "").toLowerCase() === "true";
   if (!force) return next();
 
-  // Health endpointleri deploy sırasında HTTP’den de çalışabilsin
+  // Health check endpointleri HTTP üzerinden de çalışabilsin (deploy sırasında timeout riskini azaltır)
   if (req.path === "/health" || req.path === "/healthz") return next();
 
   if (isSecureReq(req)) return next();
@@ -163,53 +163,61 @@ app.use((req, res, next) => {
   return res.redirect(301, `https://${host}${req.originalUrl}`);
 });
 
-// --- HSTS (yalnız HTTPS üzerinde aç)
+// --- HSTS (yalnızca HTTPS üzerinde anlamlı)
+// .env: HSTS=true
 app.use((req, res, next) => {
   const enable = String(process.env.HSTS || "").toLowerCase() === "true";
   if (!enable) return next();
   if (!isSecureReq(req)) return next();
 
+  // Preload kullanacaksan: includeSubDomains + uzun max-age gerekir.
   const preload = String(process.env.HSTS_PRELOAD || "").toLowerCase() === "true";
   const maxAge = Number(process.env.HSTS_MAX_AGE || 31536000);
-  const parts = [
-    `max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`,
-    "includeSubDomains",
-  ];
+  const parts = [`max-age=${Number.isFinite(maxAge) ? Math.max(0, Math.floor(maxAge)) : 31536000}`, "includeSubDomains"];
   if (preload) parts.push("preload");
   res.setHeader("Strict-Transport-Security", parts.join("; "));
   return next();
 });
 
-// --- Helmet (CSP’yi aşağıda nonce ile kendimiz kuruyoruz)
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
-    referrerPolicy: { policy: "no-referrer" },
-  })
-);
+// --- Security headers (Helmet)
+// CSP is set manually below (nonce-based).
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: "no-referrer" }
+}));
 
-// Extra hardened headers
+// --- Extra hardened headers (Helmet'in yanında)
 app.use((req, res, next) => {
+  // "Permissions-Policy" ile tarayıcı özelliklerini kapat (saldırı yüzeyi azalır)
+  // payment=() koymak, browser Payment Request API'yi kapatır; iyzico checkout formu bunu kullanmaz.
   res.setHeader(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), payment=(), interest-cohort=()"
   );
+  // Kurumsal ortamlarda legacy policy dosyaları üzerinden veri sızması riskini azaltır
   res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  // Cross-site isolation (modern tarayıcılarda) için süreç izolasyonunu teşvik eder
   res.setHeader("Origin-Agent-Cluster", "?1");
   return next();
 });
 
 // --- Nonce-based CSP
 app.use((req, res, next) => {
+  // Her ihtimale karşı: önceki middleware atlandıysa bile nonce üret.
   const nonce =
     res.locals.cspNonce ||
     (res.locals.cspNonce = crypto.randomBytes(16).toString("base64"));
 
+  // Ödeme sayfasında ("/odeme") iyzico checkout scriptleri çalışır.
+  // Uygulama sayfasında bu scriptleri hiç açmayarak saldırı yüzeyini küçültürüz.
   const isPaymentPage = req.path && String(req.path).startsWith("/odeme");
-  const iyzicoHosts = isPaymentPage
-    ? ["https://*.iyzipay.com", "https://*.iyzico.com"]
-    : [];
+
+  // Iyzico embed/scriptler için geniş ama kontrollü izinler:
+  const iyzicoHosts = isPaymentPage ? [
+    "https://*.iyzipay.com",
+    "https://*.iyzico.com"
+  ] : [];
 
   const parts = [
     "default-src 'self'",
@@ -219,15 +227,19 @@ app.use((req, res, next) => {
     `form-action 'self' ${iyzicoHosts.join(" ")}`.trim(),
     `img-src 'self' data: ${iyzicoHosts.join(" ")}`.trim(),
     "font-src 'self' data:",
+    // inline style attribute kullanıyoruz (EJS/JS). Güvenli tarafta kalmak için şimdilik izinli.
     "style-src 'self' 'unsafe-inline'",
+    // script nonce ile: XSS'e karşı en güçlü savunmalardan biri
     `script-src 'self' 'nonce-${nonce}' ${iyzicoHosts.join(" ")}`.trim(),
+    // fetch/XHR/websocket
     `connect-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
-    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim(),
+    // checkout iframe vs.
+    `frame-src 'self' ${iyzicoHosts.join(" ")}`.trim()
   ];
 
-  const upgrade = String(
-    process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")
-  ).toLowerCase() === "true";
+  // HTTPS üstünde mixed-content riskini azaltmak için istersek açarız.
+  // Local dev (http) için varsayılan: kapalı.
+  const upgrade = String(process.env.CSP_UPGRADE_INSECURE ?? (isSecureReq(req) ? "true" : "false")).toLowerCase() === "true";
   if (upgrade) parts.push("upgrade-insecure-requests");
 
   res.setHeader("Content-Security-Policy", parts.join("; "));
@@ -236,18 +248,14 @@ app.use((req, res, next) => {
 
 // --- Performance
 app.use(compression());
-app.use(
-  "/public",
-  express.static(path.join(__dirname, "public"), {
-    maxAge: "7d",
-    immutable: true,
-  })
-);
+app.use("/public", express.static(path.join(__dirname, "public"), {
+  maxAge: "7d",
+  immutable: true
+}));
 
 // --- Rate limiting (API)
 const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
 const max = Number(process.env.RATE_LIMIT_MAX || 80);
-
 app.use(
   "/api/",
   rateLimit({
@@ -256,11 +264,11 @@ app.use(
     standardHeaders: true,
     legacyHeaders: false,
     message: { ok: false, error: "Çok fazla istek. Lütfen biraz bekleyin." },
-    handler: rateLimitHandler("api"),
+    handler: rateLimitHandler("api")
   })
 );
 
-// CSRF doğrulaması (yalnızca /api state-changing istekleri)
+// CSRF doğrulaması (yalnızca state-changing API istekleri)
 app.use("/api", requireCsrf);
 
 app.use("/", routes);
@@ -274,6 +282,8 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, HOST, () => {
+  // Render gibi platformlarda uygulama gerçekte 0.0.0.0:${PORT} üstünden dinler.
+  // Dışarıdan erişim URL’i Render panelinde görünür (https://...onrender.com).
   console.log(`✅ ${APP_NAME} dinlemede: ${HOST}:${PORT}`);
 });
 
