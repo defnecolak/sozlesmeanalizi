@@ -18,6 +18,266 @@ const PACK_ALIASES = {
   influencer: ["hizmet", "satis", "gizlilik"]
 };
 
+// --- Sözleşme türü uyumu (tüm türler) --------------------------------------
+// Kullanıcı yanlış sözleşme türünü seçerse analiz (skor + öneriler) yanıltıcı
+// olabilir. Bu kontrol metindeki tipik anahtar kelimelere bakarak "seçilen tür"
+// ile "metnin daha çok benzediği tür" arasında bariz bir fark varsa soft warning
+// üretir.
+const PACK_LABELS_TR = {
+  genel: "Genel",
+  hizmet: "Hizmet / Freelance",
+  influencer: "Influencer anlaşması",
+  etkinlik: "Düğün / Etkinlik",
+  kira: "Kira",
+  satis: "Satış / Alım",
+  saas: "SaaS / Yazılım abonelik",
+  is: "İş sözleşmesi",
+  kredi: "Kredi / Borç",
+  egitim: "Eğitim",
+  gizlilik: "Gizlilik (NDA)",
+  abonelik: "Abonelik (tüketici)",
+  arac: "Araç / Kiralama",
+  seyahat: "Seyahat / Tur",
+  sigorta: "Sigorta",
+};
+
+// Keyword set'leri "mükemmel" değil; amaç bariz uyumsuzlukları yakalamak.
+// Ağırlıklar kaba: 3=çok güçlü, 2=orta, 1=zayıf.
+const PACK_TYPE_KEYWORDS = {
+  is: [
+    ["iş sözleşmesi", 3],
+    ["işveren", 3],
+    ["çalışan", 3],
+    ["sgk", 3],
+    ["maaş", 2],
+    ["ücret", 2],
+    ["mesai", 2],
+    ["deneme süresi", 2],
+    ["kıdem", 2],
+    ["ihbar", 2],
+    ["fesih", 1],
+  ],
+  gizlilik: [
+    ["nda", 3],
+    ["non disclosure", 3],
+    ["gizlilik", 3],
+    ["gizli bilgi", 3],
+    ["confidential", 3],
+    ["ifşa", 2],
+    ["disclosure", 2],
+  ],
+  kira: [
+    ["kira sözleşmesi", 3],
+    ["kiracı", 3],
+    ["kiraya veren", 3],
+    ["kira bedeli", 2],
+    ["depozito", 2],
+    ["tahliye", 2],
+    ["taşınmaz", 2],
+    ["konut", 1],
+    ["işyeri", 1],
+  ],
+  satis: [
+    ["satıcı", 3],
+    ["alıcı", 3],
+    ["satış bedeli", 3],
+    ["teslim", 2],
+    ["mülkiyet", 2],
+    ["ayıplı", 2],
+    ["garanti", 1],
+    ["fatura", 1],
+  ],
+  saas: [
+    ["saas", 3],
+    ["subscription", 3],
+    ["terms of service", 3],
+    ["lisans", 2],
+    ["abonelik", 2],
+    ["kullanıcı", 2],
+    ["sla", 2],
+    ["hizmet seviyesi", 2],
+    ["api", 1],
+    ["plan", 1],
+  ],
+  abonelik: [
+    ["abonelik", 3],
+    ["üyelik", 3],
+    ["otomatik yenileme", 2],
+    ["iptal", 2],
+    ["cayma", 2],
+    ["tüketici", 1],
+    ["fatura", 1],
+  ],
+  hizmet: [
+    ["hizmet", 2],
+    ["proje", 2],
+    ["teslim", 2],
+    ["kapsam", 2],
+    ["danışman", 2],
+    ["freelance", 3],
+    ["serbest", 2],
+    ["hakediş", 2],
+    ["fatura", 1],
+    ["ücret", 1],
+  ],
+  influencer: [
+    ["influencer", 3],
+    ["iş birliği", 3],
+    ["reklam", 2],
+    ["sponsor", 2],
+    ["marka", 2],
+    ["instagram", 2],
+    ["tiktok", 2],
+    ["youtube", 2],
+    ["post", 1],
+    ["story", 1],
+    ["hashtag", 1],
+  ],
+  etkinlik: [
+    ["düğün", 3],
+    ["nikah", 3],
+    ["davet", 2],
+    ["davetli", 2],
+    ["organizasyon", 2],
+    ["salon", 2],
+    ["etkinlik", 2],
+    ["kutlama", 2],
+    ["rezervasyon", 1],
+    ["cayma bedeli", 1],
+    ["kına", 1],
+    ["nişan", 1],
+  ],
+  kredi: [
+    ["borçlu", 3],
+    ["alacaklı", 3],
+    ["kredi", 3],
+    ["borç", 3],
+    ["taksit", 2],
+    ["vade", 2],
+    ["faiz", 2],
+    ["temerrüt", 2],
+    ["kefil", 2],
+    ["senet", 1],
+  ],
+  egitim: [
+    ["eğitim", 3],
+    ["kurs", 3],
+    ["öğrenci", 2],
+    ["katılımcı", 2],
+    ["ders", 2],
+    ["program", 2],
+    ["sertifika", 1],
+    ["kayıt", 1],
+    ["ücret iadesi", 1],
+  ],
+  arac: [
+    ["araç", 3],
+    ["kiralama", 2],
+    ["plaka", 2],
+    ["kilometre", 2],
+    ["yakıt", 1],
+    ["kasko", 2],
+    ["hasar", 2],
+    ["teslim", 1],
+    ["iade", 1],
+    ["rent a car", 3],
+  ],
+  seyahat: [
+    ["tur", 3],
+    ["seyahat", 3],
+    ["acente", 2],
+    ["otel", 2],
+    ["rezervasyon", 2],
+    ["uçuş", 2],
+    ["vize", 1],
+    ["iptal", 1],
+    ["iade", 1],
+  ],
+  sigorta: [
+    ["sigorta", 3],
+    ["poliçe", 3],
+    ["prim", 2],
+    ["teminat", 2],
+    ["hasar", 2],
+    ["tazminat", 2],
+    ["sigortalı", 2],
+    ["muafiyet", 1],
+    ["risk", 1],
+  ],
+};
+
+function packLabelTR(pack) {
+  return PACK_LABELS_TR[pack] || String(pack || "");
+}
+
+function scorePackType(textFold, pack) {
+  const defs = PACK_TYPE_KEYWORDS[pack] || [];
+  let score = 0;
+  const hits = [];
+  for (const [kwRaw, w] of defs) {
+    const kw = foldTR(String(kwRaw).toLowerCase());
+    if (!kw) continue;
+    if (textFold.includes(kw)) {
+      score += Number(w) || 1;
+      if (hits.length < 6) hits.push(kwRaw);
+    }
+  }
+  return { score, hits };
+}
+
+function guessPackType(textRaw) {
+  const textFold = foldTR(String(textRaw || "").toLowerCase());
+  const scores = {};
+  const hitsByPack = {};
+  let bestPack = null;
+  let bestScore = 0;
+  for (const pack of Object.keys(PACK_TYPE_KEYWORDS)) {
+    const { score, hits } = scorePackType(textFold, pack);
+    scores[pack] = score;
+    hitsByPack[pack] = hits;
+    if (score > bestScore) {
+      bestScore = score;
+      bestPack = pack;
+    }
+  }
+  return { scores, hitsByPack, bestPack, bestScore };
+}
+
+function detectSozlesmeTuruUyumsuzlugu(textRaw, selectedPack) {
+  const selected = (selectedPack || "genel").toString();
+  const { scores, hitsByPack, bestPack, bestScore } = guessPackType(textRaw);
+  const selectedScore = scores[selected] || 0;
+
+  // Çok zayıf sinyalse hiç karışma.
+  const MIN_SCORE = 6;
+  const MARGIN = 4;
+  if (!bestPack || bestScore < MIN_SCORE) return null;
+  if (bestPack === selected) return null;
+
+  // "Genel" seçildiyse bunu bir öneri gibi söyleyelim.
+  const isSuggestion = selected === "genel";
+  if (!isSuggestion && bestScore < selectedScore + MARGIN) return null;
+
+  const hits = (hitsByPack[bestPack] || []).slice(0, 4);
+  const hitText = hits.length ? ` (ipucu kelimeler: ${hits.join(", ")})` : "";
+
+  return {
+    id: isSuggestion ? "pack_suggestion" : "pack_mismatch",
+    title: isSuggestion
+      ? "Sözleşme türü tahmini"
+      : "Sözleşme türü seçimi uyuşmuyor olabilir",
+    severity: isSuggestion ? "low" : "medium",
+    category: "Belirsizlik",
+    why: isSuggestion
+      ? `Bu metin, seçili tür \"Genel\" iken daha çok “${packLabelTR(bestPack)}” gibi görünüyor${hitText}. Türü seçip tekrar analiz edersen daha isabetli sonuç alırsın.`
+      : `Seçilen tür “${packLabelTR(selected)}”, ama metin daha çok “${packLabelTR(bestPack)}” türüne benziyor${hitText}. Yanlış tür seçimi skor ve önerileri şişirebilir/azaltabilir; üstteki “Sözleşme Türü” alanından düzeltip tekrar analiz et.`,
+    templates: [
+      "Sözleşme türünü doğru seçtiğinden emin ol.",
+      "Yanlış seçtiysen türü değiştirip tekrar analiz et.",
+    ],
+  };
+}
+
 function filterRulesByPack(packId) {
   const pack = (packId || "genel").toString();
   const aliases = PACK_ALIASES[pack] || [];
@@ -40,7 +300,7 @@ function sha(text) {
 function getLevelFromScore(riskScore) {
   if (riskScore >= 75) return { level: "ÇOK YÜKSEK", color: "critical" };
   if (riskScore >= 55) return { level: "YÜKSEK", color: "high" };
-  if (riskScore >= 30) return { level: "ORTA", color: "medium" };
+  if (riskScore >= 30) return { level: "MEDIUM", color: "medium" };
   return { level: "DÜŞÜK", color: "low" };
 }
 
@@ -205,6 +465,120 @@ function makeClause(text, index, maxLen = 12000) {
   return out;
 }
 
+
+// --- Etkinlik konusu / türü tutarlılık kontrolü (düğün mü, kurumsal etkinlik mi?) ---
+function foldTR(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c");
+}
+
+function findFirstMatchIndex(text, regexes) {
+  const t = String(text || "");
+  for (const re of regexes) {
+    try {
+      const r = new RegExp(re.source, re.flags); // clone to avoid sticky state
+      const m = r.exec(t);
+      if (m && typeof m.index === "number") return { index: m.index, match: m[0] };
+    } catch (_) {
+      // ignore invalid regex
+    }
+  }
+  return null;
+}
+
+function detectEtkinlikKonuUyumsuzlugu(text) {
+  const raw = String(text || "");
+  if (!raw) return null;
+
+  const folded = foldTR(raw);
+
+    const weddingMarkers = [
+      "dugun",
+      "nikah",
+      "gelin",
+      "damat",
+      "nisan",
+      "kina",
+      "evlilik",
+      "davetli",
+      "dugun salon",
+    ];
+    const corpMarkers = [
+      "sirket",
+      "firma",
+      "kurumsal",
+      "eczane",
+      "magaza",
+      "marka",
+      "lansman",
+      "acilis",
+      "yildonum",
+      "yil donum",
+      "kutlama",
+    ];
+
+    const hasWedding = weddingMarkers.some((k) => folded.includes(k));
+    const hasCorp = corpMarkers.some((k) => folded.includes(k));
+
+  // "Etkinlik konusu" gibi bir cümle/başlık yakalamaya çalış
+  const subjectHit =
+    findFirstMatchIndex(raw, [
+      /[^\n.]{0,80}\b(kutlamas[ıi]|yıl\s*dönümü|yıldönümü)\b[^\n.]{0,80}/i,
+      /[^\n.]{0,80}\b(etkinli(ğ|g)i|organizasyon(u)?)\b[^\n.]{0,80}/i,
+      /eczane[^\n.]{0,120}/i,
+    ]) || findFirstMatchIndex(raw, [/etkinlik/i, /organizasyon/i, /kutlama/i, /yıl\s*dönümü/i]);
+
+  const quote = subjectHit ? makeClause(raw, subjectHit.index) : "";
+
+  // Kanıt kelimelerinden 1-2 tane gösterelim
+  const evidence = [];
+  const corpEv = findFirstMatchIndex(raw, [
+    /eczane/i,
+    /şirket/i,
+    /firma/i,
+    /kurumsal/i,
+    /yıl\s*dönümü/i,
+    /yıldönümü/i,
+    /kutlama/i,
+    /lansman/i,
+    /açılış/i,
+  ]);
+  if (corpEv) evidence.push(corpEv.match);
+  const wedEv = findFirstMatchIndex(raw, [/düğün/i, /dugun/i, /nikah/i, /gelin/i, /damat/i, /nişan/i, /nisan/i, /kına/i, /kina/i]);
+  if (wedEv) evidence.push(wedEv.match);
+
+  // Uyarı üret: düğün beklenirken kurumsal etkinlik gibi duruyorsa
+  if (hasCorp && !hasWedding) {
+    return {
+      detectedType: "kurumsal/başka etkinlik",
+      level: "MEDIUM",
+      evidence: evidence.filter(Boolean).slice(0, 3),
+      quote,
+      message:
+        "Metin düğün/nikah gibi görünmüyor; kurumsal/başka bir etkinliğe işaret eden ifadeler var. Eğer bu sözleşme düğün için hazırlanıyorsa, etkinlik konusu/başlığı yanlış yazılmış olabilir.",
+    };
+  }
+
+  // Her ikisi de varsa: karışık olabilir
+  if (hasCorp && hasWedding) {
+    return {
+      detectedType: "karma",
+      level: "LOW",
+      evidence: evidence.filter(Boolean).slice(0, 3),
+      quote,
+      message:
+        "Metinde hem düğün hem de kurumsal/başka etkinlik ifadeleri var. Etkinlik konusu/başlığı, taraflar ve tarihler tutarlı mı kontrol et.",
+    };
+  }
+
+  return null;
+}
 
 function formatMoney(amount, currency = "EUR") {
   const n = Number(amount);
@@ -465,6 +839,36 @@ if (hasConf && !hasConfExceptions) {
   });
   riskPoints += 6;
 }
+
+// Sözleşme türü seçimi ile metnin türü bariz şekilde uyuşmuyorsa uyar (tüm türler)
+const packTypeWarn = detectSozlesmeTuruUyumsuzlugu(text, pack);
+if (packTypeWarn) {
+  // Bu uyarı genelde "yanlış tür seçimi" demek olduğu için üstte görünmesi iyi.
+  softWarnings.unshift(packTypeWarn);
+}
+
+// Etkinlik sözleşmelerinde "konu" tutarlılığı: düğün yerine başka bir etkinlik yazılmış olabilir
+if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch")) {
+  const konu = detectEtkinlikKonuUyumsuzlugu(text);
+  if (konu) {
+    const ev = konu.evidence && konu.evidence.length ? ` (örn. ${konu.evidence.join(", ")})` : "";
+    softWarnings.unshift({
+      id: "event_topic_mismatch",
+      title: "Etkinlik konusu tutarsız olabilir",
+      severity: konu.level || "MEDIUM",
+      category: "Tutarlılık",
+      why: `${konu.message}${ev}`,
+      quote: konu.quote || undefined,
+      templates: [
+        "Etkinlik konusu/başlığı (ne etkinliği/kutlaması) net ve doğru yazılsın.",
+        "Sözleşmenin tamamında etkinlik adı/türü, tarih ve taraflar aynı şekilde geçsin.",
+        "Eğer bu bir düğün sözleşmesi ise, metindeki etkinlik tanımı düğün/nikah ile uyumlu hale getirilsin.",
+      ],
+    });
+    // Not: Bu bir tutarlılık uyarısı; skoru şişirmemek için puan eklemiyoruz.
+  }
+}
+
 
   // Quality warning
   const quality = opts.quality || null;
