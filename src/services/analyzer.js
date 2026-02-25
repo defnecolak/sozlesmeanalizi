@@ -57,7 +57,7 @@ function packFactor(pack) {
   // Bazı sözleşme türlerinde (ör. etkinlik/mekan) standart şartlar daha fazla olduğu için skoru biraz yumuşatıyoruz.
   // Etkinlik/düğün sözleşmeleri: yüksek risk maddeleri çok sık “şablon” olarak geliyor.
   // Aynı uyarıları göstermek isteriz ama skoru daha az agresif yapalım.
-  if (p === "etkinlik") return 3.00;
+  if (p === "etkinlik") return 5.00;
   if (p === "kira") return 1.20;
   if (p === "saas") return 1.15;
   if (p === "hizmet") return 1.10;
@@ -127,59 +127,81 @@ function makeSnippet(text, index, length = 220) {
 // PDF → metin dönüşümlerinde satır kırılımları çok oynak olduğu için tek satır newline
 // ile kesmek alıntıyı çoğu zaman yarım bırakıyor. Bu yüzden daha geniş bir pencere
 // ve daha “akıllı” bitiş kriterleri kullanıyoruz.
-function makeClause(text, index, maxLen = 7000) {
+function makeClause(text, index, maxLen = 12000) {
   const t = String(text || "");
   if (!t) return "";
+
   const i = Math.max(0, Math.min(Number(index) || 0, t.length));
 
-  const lookBack = Math.max(maxLen, 6000);
-  const winStart = Math.max(0, i - lookBack);
+  // Amaç: 'Metinden alıntı' kısmında mümkün olduğunca *bütün maddeyi* göstermek.
+  // PDF -> metin dönüşümlerinde satır kırılımları bozulabildiği için hem
+  // "MADDE 14" hem de "14.4." gibi numaralı madde başlangıçlarını yakalamaya çalışıyoruz.
+  const backWindow = 22000;
+  const fwdWindow = 26000;
+
+  const winStart = Math.max(0, i - backWindow);
+  const winEnd = Math.min(t.length, i + fwdWindow);
+
   const before = t.slice(winStart, i);
-
-  // Paragraf başlangıcı: önce \n\n, yoksa \n
-  let paraStart = before.lastIndexOf("\n\n");
-  if (paraStart >= 0) paraStart = winStart + paraStart + 2;
-  else {
-    const oneNl = before.lastIndexOf("\n");
-    paraStart = oneNl >= 0 ? winStart + oneNl + 1 : winStart;
-  }
-
-  // "MADDE 1" gibi başlık varsa daha geriden başlat (yakın çevrede)
-  const maddeRe = /(^|\n)\s*(MADDE|Madde)\s*\d+[^\n]{0,60}/g;
-  let maddeStart = -1;
-  let m;
-  while ((m = maddeRe.exec(before)) !== null) {
-    maddeStart = winStart + m.index + (m[1] ? m[1].length : 0);
-  }
-
-  const start = maddeStart >= 0 ? Math.min(paraStart, maddeStart) : paraStart;
-
-  const lookFwd = Math.max(maxLen, 6000);
-  const winEnd = Math.min(t.length, i + lookFwd);
   const after = t.slice(i, winEnd);
 
-  // Bitiş: öncelik sırası
-  // 1) bir sonraki “MADDE <no>” başlığı
-  // 2) paragraf sonu (çift newline)
-  // 3) yoksa pencere sonu
-  let end = winEnd;
+  // Madde başlangıcı yakalayıcıları
+  const reMadde = /(^|\n)\s*(MADDE|Madde)\s*\d+[^\n]{0,120}/g;
+  // 14.4., 5.5, 7) gibi (satır başında) numaralı madde başlangıçları
+  const reNum = /(^|\n)\s*\d+(?:\.\d+){0,5}\s*(?:[)\.]|[-\u2013\u2014])\s*/g;
 
-  // Bir sonraki MADDE başlığı varsa orada kes
-  const nextMadde = after.match(/\n\s*(MADDE|Madde)\s*\d+/);
-  if (nextMadde && typeof nextMadde.index === "number") {
-    end = Math.min(end, i + nextMadde.index);
+  const lastMatchStart = (rx, s) => {
+    let last = null;
+    let m;
+    while ((m = rx.exec(s))) last = m;
+    rx.lastIndex = 0;
+    return last ? last.index : -1;
+  };
+
+  const firstMatchStart = (rx, s) => {
+    const m = rx.exec(s);
+    rx.lastIndex = 0;
+    return m ? m.index : -1;
+  };
+
+  // 1) Başlangıç: gerideki en yakın madde başlığını bul
+  let start = winStart;
+  const s1 = lastMatchStart(reMadde, before);
+  const s2 = lastMatchStart(reNum, before);
+  if (s1 >= 0) start = Math.max(start, winStart + s1);
+  if (s2 >= 0) start = Math.max(start, winStart + s2);
+
+  // Hiç yakalayamazsak paragraf başlangıcına yakınla
+  if (start === winStart) {
+    const p2 = before.lastIndexOf("\n\n");
+    if (p2 >= 0) start = winStart + p2 + 2;
+    else {
+      const p1 = before.lastIndexOf("\n");
+      if (p1 >= 0) start = winStart + p1 + 1;
+    }
   }
 
-  const paraEndRel = after.indexOf("\n\n");
-  if (paraEndRel >= 0) {
-    end = Math.min(end, i + paraEndRel);
+  // 2) Bitiş: ileriye doğru bir sonraki madde başlığını bul
+  let end = winEnd;
+  const e1 = firstMatchStart(reMadde, after);
+  const e2 = firstMatchStart(reNum, after);
+
+  const ends = [];
+  if (e1 > 0) ends.push(i + e1);
+  if (e2 > 0) ends.push(i + e2);
+  if (ends.length) end = Math.min(...ends);
+  else {
+    const pe = after.indexOf("\n\n");
+    if (pe >= 0) end = i + pe;
   }
 
   if (end < start) end = Math.min(t.length, start + maxLen);
   if (end - start > maxLen) end = Math.min(t.length, start + maxLen);
 
   let out = t.slice(start, end).trim();
-  out = out.replace(/\t+/g, " ").replace(/[ \u00a0]+/g, " ");
+  // Boşlukları hafif toparla (metni bozma)
+  out = out.replace(/\t/g, " ");
+  out = out.replace(/[ \u00a0]+/g, " ");
   return out;
 }
 

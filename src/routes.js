@@ -311,16 +311,11 @@ function appBaseUrl(req) {
   return `${req.protocol}://${req.get("host")}`;
 }
 
-router.get("/", async (req, res) => {
-  try { await fs.mkdir(uploadDir, { recursive: true }); } catch {}
-  // Analiz sayfası kullanıcı metni içerdiği için cache'lenmesin
-  res.setHeader("Cache-Control", "no-store");
-  res.render("landing", {
-    appName: process.env.APP_NAME || "Sözleşmem",
-    supportEmail: process.env.SUPPORT_EMAIL || "",
-    baseUrl: appBaseUrl(req)
-  });
+router.get("/", (req, res) => {
+  // Üretimde ana domainin "under construction" yerine direkt uygulamaya gitmesi daha iyi.
+  res.redirect(302, "/uygulama");
 });
+
 
 router.get("/fiyatlandirma", (req, res) => {
   const prov = String(process.env.PAYMENTS_PROVIDER || "off").toLowerCase();

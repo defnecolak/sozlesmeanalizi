@@ -847,12 +847,12 @@ function updateSim(ev) {
 
   if (cancelDaysVal) {
     const cd = cancelDate ? cancelDate.toLocaleDateString("tr-TR") : "—";
-    cancelDaysVal.textContent = `${daysBefore} gün kala (iptal tarihi: ${cd})`;
+    if (cancelDaysVal) cancelDaysVal.textContent = `${daysBefore} gün kala (iptal tarihi: ${cd})`;
   }
 
   if (cancelResult) {
     if (pct == null || fee == null) {
-      cancelResult.textContent = "İptal tablosu metinden net çıkarılamadı.";
+      if (cancelResult) cancelResult.textContent = "İptal tablosu metinden net çıkarılamadı.";
     } else {
       cancelResult.innerHTML = `
         <div><b>İptal bedeli:</b> %${pct} (${formatMoney(fee, currency)})</div>
@@ -873,7 +873,7 @@ function updateSim(ev) {
 
   // Slider/UI senkronu
   if (actualGuestsVal) {
-    actualGuestsVal.textContent = `Seçili kişi sayısı: ${Number.isFinite(actual) ? actual : 0}`;
+    if (actualGuestsVal) actualGuestsVal.textContent = `Seçili kişi sayısı: ${Number.isFinite(actual) ? actual : 0}`;
   }
   if (actualGuestsRange) {
     const max = guestRangeMax(guarantee, actual);
@@ -887,7 +887,7 @@ function updateSim(ev) {
 
   if (guestResult) {
     if (!guarantee) {
-      guestResult.textContent = "Garanti kişi sayısı çıkarılamadı.";
+      if (guestResult) guestResult.textContent = "Garanti kişi sayısı çıkarılamadı.";
     } else {
       guestResult.innerHTML = `
       <div><b>Garanti:</b> ${Number.isFinite(guarantee) ? guarantee : 0} • <b>Gerçek:</b> ${Number.isFinite(actual) ? actual : 0}</div>
@@ -972,10 +972,10 @@ function renderScoreExplain(summary) {
   if (scoreCounterEl) {
     const w = Number(ex?.withoutTopDriversScore);
     if (Number.isFinite(w)) {
-      scoreCounterEl.textContent = `Bu 3 madde olmasa skor yaklaşık ${w}/100 olurdu.`;
+      if (scoreCounterEl) scoreCounterEl.textContent = `Bu 3 madde olmasa skor yaklaşık ${w}/100 olurdu.`;
       scoreCounterEl.classList.remove("hidden");
     } else {
-      scoreCounterEl.textContent = "";
+      if (scoreCounterEl) scoreCounterEl.textContent = "";
       scoreCounterEl.classList.add("hidden");
     }
   }
@@ -985,8 +985,8 @@ function renderAll(analysis, extracted) {
   const s = analysis.summary;
   const m = analysis.meta;
 
-  riskScoreEl.textContent = `${s.riskScore}/100`;
-  riskLevelEl.textContent = `Seviye: ${s.riskLevel}`;
+  if (riskScoreEl) riskScoreEl.textContent = `${s.riskScore}/100`;
+  if (riskLevelEl) riskLevelEl.textContent = `Seviye: ${s.riskLevel}`;
   riskLevelEl.className = pillColorClass(s.riskLevelColor);
 
   if (metaLine) {
@@ -1004,8 +1004,8 @@ function renderAll(analysis, extracted) {
   }
   }
 
-  issueCountEl.textContent = `${s.issueCount}`;
-  softCountEl.textContent = `${s.softWarningCount}`;
+  if (issueCountEl) issueCountEl.textContent = `${s.issueCount}`;
+  if (softCountEl) softCountEl.textContent = `${s.softWarningCount}`;
 
   renderScoreExplain(s);
 
@@ -1279,7 +1279,7 @@ async function loadBillingStatus() {
     // Üst barda: sadece kredi sayısını sade bir şekilde göster
     if (creditsPill && creditsCount) {
       creditsPill.classList.remove("hidden");
-      creditsCount.textContent = st.unlimited ? "∞" : String(st.credits ?? 0);
+      if (creditsCount) creditsCount.textContent = st.unlimited ? "∞" : String(st.credits ?? 0);
       creditsPill.setAttribute("title", `Ücretsiz kalan: ${freeLeft} • Kredi: ${st.unlimited ? "Sınırsız" : (st.credits ?? 0)}`);
     }
 
