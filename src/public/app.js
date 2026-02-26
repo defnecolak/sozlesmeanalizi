@@ -844,6 +844,7 @@ function updateSim(ev) {
   const cancelIso = cancelDate ? cancelDate.toISOString().slice(0, 10) : null;
   const paid = cancelIso ? sumPaidUntil(ev.paymentSchedule || [], cancelIso) : 0;
   const addl = (fee != null) ? Math.max(0, fee - paid) : null;
+  const refund = (fee != null) ? Math.max(0, (paid ?? 0) - fee) : null;
 
   if (cancelDaysVal) {
     const cd = cancelDate ? cancelDate.toLocaleDateString("tr-TR") : "—";
@@ -854,14 +855,17 @@ function updateSim(ev) {
     if (pct == null || fee == null) {
       if (cancelResult) cancelResult.textContent = "İptal tablosu metinden net çıkarılamadı.";
     } else {
-      cancelResult.innerHTML = `
-        <div><b>İptal bedeli:</b> %${pct} (${formatMoney(fee, currency)})</div>
-        <div><b>Bu tarihe kadar ödenmiş taksitler:</b> ${formatMoney(paid, currency)}</div>
-        <div><b>Ek ödenmesi muhtemel tutar:</b> ${formatMoney(addl, currency)}</div>
-        <div class="muted small" style="margin-top:6px">
-          Not: Sözleşmede “cayma bedeli” ve “cezai şart” hükümleri birlikte geçtiği için kesin hesap için sözleşme maddelerini esas alın.
-        </div>
-      `;
+	      cancelResult.innerHTML = `
+	        <div><b>İptal bedeli:</b> %${pct} (${formatMoney(fee, currency)})</div>
+	        <div><b>Bu tarihe kadar ödenmiş:</b> ${formatMoney(paid, currency)}</div>
+	        ${refund && refund > 0
+	          ? `<div><b>Muhtemel iade:</b> ${formatMoney(refund, currency)}</div>`
+	          : `<div><b>Ek ödenecek (muhtemel):</b> ${formatMoney(addl, currency)}</div>`
+	        }
+	        <div class="muted small" style="margin-top:6px">
+	          Not: Sözleşmede “cayma bedeli” ve “cezai şart” hükümleri birlikte geçtiği için kesin hesap için sözleşme maddelerini esas alın.
+	        </div>
+	      `;
     }
   }
 
@@ -889,14 +893,26 @@ function updateSim(ev) {
     if (!guarantee) {
       if (guestResult) guestResult.textContent = "Garanti kişi sayısı çıkarılamadı.";
     } else {
+	      const minPay = Number(ev.total || 0);
+	      const estTotal = (minPay > 0) ? (minPay + extraCost) : 0;
+	      const underMinNote = (Number.isFinite(actual) && Number.isFinite(guarantee) && actual < guarantee)
+	        ? " Garanti kişi sayısından az olsa bile genelde minimum ödeme garanti sayısıdır."
+	        : "";
       guestResult.innerHTML = `
-      <div><b>Garanti:</b> ${Number.isFinite(guarantee) ? guarantee : 0} • <b>Gerçek:</b> ${Number.isFinite(actual) ? actual : 0}</div>
-        <div><b>Ek kişi:</b> ${extra}</div>
-        <div><b>Ek maliyet (yaklaşık):</b> ${formatMoney(extraCost, currency)}</div>
-        <div class="muted small" style="margin-top:6px">
-          Not: Sözleşmede belli bir artışın üzerindeki talepleri karşılamama hakkı olabilir; kapasite/operasyon şartlarına bağlıdır.
-        </div>
-      `;
+	        <div>
+	          <b>Garanti:</b> ${Number.isFinite(guarantee) ? guarantee : 0}
+	          <span class="muted">•</span>
+	          <b>Seçili kişi:</b> ${Number.isFinite(actual) ? actual : 0}
+	        </div>
+	        ${perPerson > 0 ? `<div><b>Kişi başı (yaklaşık):</b> ${formatMoney(perPerson, currency)}</div>` : ""}
+	        <div><b>Ek kişi:</b> ${extra}</div>
+	        <div><b>Ek maliyet (yaklaşık):</b> ${formatMoney(extraCost, currency)}</div>
+	        ${minPay > 0 ? `<div><b>Minimum ödeme (garanti):</b> ${formatMoney(minPay, currency)}</div>` : ""}
+	        ${estTotal > 0 ? `<div><b>Tahmini toplam:</b> ${formatMoney(estTotal, currency)}</div>` : ""}
+	        <div class="muted small" style="margin-top:6px">
+	          Not: Sözleşmede belli bir artışın üzerindeki talepleri karşılamama hakkı olabilir; kapasite/operasyon şartlarına bağlıdır.${underMinNote}
+	        </div>
+	      `;
     }
   }
 }
@@ -1363,7 +1379,14 @@ function buildNegotiationForIssue(it, opts = {}) {
   const includeClosing = !!opts.includeClosing;
 
   const title = String(it?.title || "—").trim();
-  const clause = it?.clause ? ` (${String(it.clause).trim()})` : "";
+
+  // Pazarlık metninde başlık yerine mümkünse sadece madde numarası göster.
+  // Örn: “Sınırsız sorumluluk / dolaylı zarar” yerine “Madde 10”.
+  const clauseRaw = it?.clause ? String(it.clause).trim() : "";
+  const clauseLabel = clauseRaw
+    ? clauseRaw.replace(/^[\s(]+|[\s)]+$/g, "").trim()
+    : "";
+  const refLabel = clauseLabel || `“${title}”`;
   const why = String(it?.why || "Bu madde benim için gereksiz risk oluşturuyor.").trim();
 
   const rawMoney = String(it?.moneyImpact || "").trim();
@@ -1390,7 +1413,7 @@ function buildNegotiationForIssue(it, opts = {}) {
   if (includeGreeting) out += "Merhaba,\n\n";
 
   // Gönderime hazır, daha doğal bir metin
-  out += `Sözleşmedeki “${title}”${clause} maddesi için küçük bir revize rica edeceğim.\n\n`;
+  out += `Sözleşmedeki ${refLabel} maddesi için küçük bir revize rica edeceğim.\n\n`;
   out += `${why}\n`;
   if (money) out += `Bu maddenin tahmini parasal etkisi ${money}.\n`;
   out += `\nUygunsa şu revizeyi rica ediyorum. ${asks.join(" ")}`;

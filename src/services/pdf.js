@@ -266,8 +266,11 @@ function isMoneyUnknown(moneyImpact) {
 }
 
 function negotiationLines(it) {
-  const clause = it?.clause ? ` (${it.clause})` : "";
+  // PDF tarafında da başlık yerine mümkünse sadece madde numarası göster.
+  const clauseRaw = it?.clause ? String(it.clause).trim() : "";
+  const clauseLabel = clauseRaw ? clauseRaw.replace(/^[\s(]+|[\s)]+$/g, "").trim() : "";
   const title = (it?.title || "—").toString().trim();
+  const refLabel = clauseLabel || `“${title}”`;
   const why = truncate(it?.why || "Bu madde benim için gereksiz risk oluşturuyor.", 240);
 
   const rawMoney = String(it?.moneyImpact || "").trim();
@@ -282,7 +285,7 @@ function negotiationLines(it) {
     : ["Bu maddeyi daha net ve dengeli olacak şekilde revize edelim"];
 
   const lines = [];
-  lines.push(`Sözleşmedeki “${title}”${clause} maddesi için küçük bir revize rica edeceğim.`);
+  lines.push(`Sözleşmedeki ${refLabel} maddesi için küçük bir revize rica edeceğim.`);
   lines.push(`Kısaca: ${why}`);
   if (money) lines.push(`Parasal etki (tahmini): ${money}`);
   const askSentences = asks

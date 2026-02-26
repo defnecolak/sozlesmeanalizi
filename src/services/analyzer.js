@@ -297,11 +297,32 @@ function sha(text) {
   return crypto.createHash("sha256").update(text).digest("hex").slice(0, 12);
 }
 
-function getLevelFromScore(riskScore) {
-  if (riskScore >= 75) return { level: "ÇOK YÜKSEK", color: "critical" };
-  if (riskScore >= 55) return { level: "YÜKSEK", color: "high" };
-  if (riskScore >= 30) return { level: "MEDIUM", color: "medium" };
-  return { level: "DÜŞÜK", color: "low" };
+function getLevelFromScore(riskScore, severityCounts = {}) {
+  // Skor tek başına her zaman yeterli değil.
+  // Örn. 1 adet KRİTİK madde varsa, toplam skor düşük kalsa bile kullanıcıya en az "ORTA" demek daha dürüst.
+  const rankMap = [
+    { level: "DÜŞÜK", color: "low" },
+    { level: "ORTA", color: "medium" },
+    { level: "YÜKSEK", color: "high" },
+    { level: "ÇOK YÜKSEK", color: "critical" },
+  ];
+
+  // Baz eşikler (genel):
+  let baseRank = 0;
+  if (riskScore >= 75) baseRank = 3;
+  else if (riskScore >= 55) baseRank = 2;
+  else if (riskScore >= 30) baseRank = 1;
+
+  // Şiddete göre minimum seviye:
+  const crit = Number(severityCounts.CRITICAL || 0);
+  const high = Number(severityCounts.HIGH || 0);
+  let minRank = 0;
+  if (crit >= 1) minRank = 1; // en az ORTA
+  if (crit >= 2 || (crit >= 1 && high >= 2)) minRank = 2; // en az YÜKSEK
+  if (crit >= 3) minRank = 3; // çok nadir
+
+  const finalRank = Math.max(baseRank, minRank);
+  return rankMap[finalRank];
 }
 
 function roleMultiplier(rule, role) {
@@ -317,7 +338,8 @@ function packFactor(pack) {
   // Bazı sözleşme türlerinde (ör. etkinlik/mekan) standart şartlar daha fazla olduğu için skoru biraz yumuşatıyoruz.
   // Etkinlik/düğün sözleşmeleri: yüksek risk maddeleri çok sık “şablon” olarak geliyor.
   // Aynı uyarıları göstermek isteriz ama skoru daha az agresif yapalım.
-  if (p === "etkinlik") return 5.00;
+  // Not: Bu değer "puan -> skor" eğrisini etkiler (k sabitini büyütür). Çok yüksek yaparsak skor aşırı düşer.
+  if (p === "etkinlik") return 1.20;
   if (p === "kira") return 1.20;
   if (p === "saas") return 1.15;
   if (p === "hizmet") return 1.10;
@@ -888,8 +910,12 @@ if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch"
     it.scorePoints = Number(rulePointsById[it.id] || 0);
   }
 
+  // Seviye hesaplaması için şiddet sayımları
+  const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  for (const it of groupedIssues) severityCounts[it.severity] = (severityCounts[it.severity] || 0) + 1;
+
   const riskScore = scoreFromPoints(riskPoints, pack, groupedIssues.length, softWarnings.length);
-  const levelInfo = getLevelFromScore(riskScore);
+  const levelInfo = getLevelFromScore(riskScore, severityCounts);
 
   groupedIssues.sort((a, b) => {
     const ra = SEVERITY_RANK[a.severity] || 0;
@@ -908,8 +934,7 @@ if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch"
   const categoryCounts = {};
   for (const it of groupedIssues) categoryCounts[it.category] = (categoryCounts[it.category] || 0) + 1;
 
-  const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-  for (const it of groupedIssues) severityCounts[it.severity] = (severityCounts[it.severity] || 0) + 1;
+  // (severityCounts yukarıda hesaplandı)
 
   // --- Skor açıklaması (explainability)
   // Amaç: "52/100 = imzala" gibi algılanmasın. Skoru hangi maddelerin yükselttiğini sade şekilde anlat.

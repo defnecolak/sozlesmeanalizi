@@ -187,16 +187,7 @@
         </div>
       </div>
 
-      <div class="score-explain" id="scoreExplainBox">
-        <div class="score-explain-head">
-          <h3 style="margin:0">Skor Açıklaması</h3>
-          <div class="muted small" id="scoreMeaning">—</div>
-        </div>
-        <ul class="bullets" id="scoreFactors"></ul>
-        <div class="muted small" style="margin-top:10px"><strong>Skoru en çok artıran 3 madde</strong></div>
-        <div class="driver-list" id="scoreDrivers"></div>
-        <div class="muted small" id="scoreCounterfactual" style="margin-top:8px"></div>
-      </div>
+      <!-- Skor Açıklaması kaldırıldı (tekrar eden içerik + daha sade UI) -->
 
       <div class="top3">
         <h3>En Önemli 3 Risk</h3>
@@ -342,6 +333,6 @@
     window.__CSP_NONCE__ = "<%= cspNonce %>";
     window.__CHECKOUT_PACKS__ = <%- JSON.stringify(checkoutPacks || []) %>;
   </script>
-  <script src="/public/app.js?v=17"></script>
+  <script src="/public/app.js?v=19"></script>
 </body>
 </html>
