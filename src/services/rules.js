@@ -73,7 +73,7 @@ const RULES = [
     id: "penalty_clause",
     title: "Cezai şart / cayma bedeli",
     packs: ["genel", "satis", "hizmet", "kira"],
-    packAdjust: { etkinlik: 0.8 },
+    packAdjust: { etkinlik: 0.55 },
     severity: "HIGH",
     category: "Cezalar",
     affects: ["all"],
@@ -104,6 +104,7 @@ const RULES = [
     id: "unlimited_liability",
     title: "Sınırsız sorumluluk / dolaylı zarar",
     packs: ["genel", "hizmet", "satis", "saas"],
+    packAdjust: { etkinlik: 0.65 },
     severity: "CRITICAL",
     category: "Sorumluluk",
     affects: ["hizmet_veren", "satici", "all"],
@@ -374,7 +375,7 @@ const RULES = [
   id: "subcontractor_unrestricted",
   title: "Alt yüklenici / üçüncü kişi kullanımı sınırsız",
     packs: ["hizmet", "genel"],
-    packAdjust: { etkinlik: 0.75 },
+    packAdjust: { etkinlik: 0.5 },
   severity: "MEDIUM",
   category: "Sözleşme Yönetimi",
   affects: ["all"],
@@ -517,6 +518,432 @@ const RULES = [
     "Minimum teslim/performans kriterlerini yazdır.",
     "Sorun olursa düzeltme veya iade/indirim hakkı eklet."
   ]
+},
+
+// ---------------------------------------------------------------------------
+// KREDİ / BORÇ (kredi)
+// ---------------------------------------------------------------------------
+{
+  id: "kredi_muacceliyet",
+  title: "Muacceliyet / borcun tamamının erken istenmesi",
+  category: "Ödeme",
+  packs: ["kredi"],
+  severity: "HIGH",
+  patterns: [
+    "muaccel",
+    "borcun\s+tamam[ıi]\s+muaccel",
+    "t[uü]m\s+bor[cç].{0,40}muaccel",
+    "kalan\s+t[uü]m\s+taksit.{0,40}derhal\s+isten",
+  ],
+  why:
+    "Muacceliyet varsa küçük bir gecikme/ihlalde bile borcun tamamı bir anda istenebilir; bu da nakit akışını zorlayabilir.",
+  ask:
+    "Muacceliyet tetikleyicileri net yazılsın (kaç gün gecikme gibi) ve mümkünse önce yazılı ihtar + makul süre (örn. 7-14 gün) tanınsın.",
+  packAdjust: { kredi: 0.95 },
+},
+{
+  id: "kredi_degisken_faiz",
+  title: "Faizin tek taraflı / belirsiz değiştirilebilmesi",
+  category: "Ödeme",
+  packs: ["kredi"],
+  severity: "MEDIUM",
+  patterns: [
+    "(faiz|k[aâ]r\s+pay[ıi]).{0,80}(tek\s+tarafl[ıi]|diledi[gğ]inde|her\s+zaman).{0,80}(de[gğ]i[sş]tir|g[uü]ncelle)",
+    "faiz\s+oran[ıi].{0,60}de[gğ]i[sş]tirilebilir",
+    "banka.{0,80}faiz.{0,40}belirler",
+  ],
+  why:
+    "Faiz/ücretin tek taraflı değişmesi, toplam maliyeti öngörülemez hale getirir.",
+  ask:
+    "Faiz/masraf değişiklikleri için açık yöntem (endeks/formül), önceden bildirim ve kabul etmiyorsan fesih/erken kapama hakkı yazılsın.",
+  packAdjust: { kredi: 0.95 },
+},
+{
+  id: "kredi_kefalet_muteselsil",
+  title: "Kefalet / müştereken ve müteselsil sorumluluk",
+  category: "Sorumluluk",
+  packs: ["kredi"],
+  severity: "HIGH",
+  patterns: [
+    "m[uü]teselsil\s+kefil",
+    "\bkefil\b",
+    "m[uü][sş]tereken\s+ve\s+m[uü]teselsilen",
+    "garant[oö]r",
+  ],
+  why:
+    "Kefalet veya müteselsil sorumluluk, borçlunun ödememesi halinde senin de borcun tamamından sorumlu tutulmana yol açabilir.",
+  ask:
+    "Kefalet gerekiyorsa tutar/süre sınırı koy ve kefaletin hangi koşulda devreye gireceğini netleştir (önce borçluya takip gibi).",
+  packAdjust: { kredi: 0.95 },
+},
+{
+  id: "kredi_teminat_ipotek_rehin",
+  title: "Teminat / ipotek / rehin / blokaj",
+  category: "Sorumluluk",
+  packs: ["kredi"],
+  severity: "MEDIUM",
+  patterns: ["ipotek", "rehin", "teminat", "blokaj", "temlik"],
+  why:
+    "Teminat hükümleri, varlıkların üzerinde ek yük oluşturabilir ve tahsilat riskini artırabilir.",
+  ask:
+    "Teminat kapsamını daralt (hangi varlık, hangi değer), teminatın hangi koşulda paraya çevrileceğini açık yaz ve teminat iadesi şartlarını ekle.",
+  packAdjust: { kredi: 0.9 },
+},
+{
+  id: "kredi_tahsil_masraf_avukat",
+  title: "Tahsil / takip masrafları ve avukatlık ücretinin borçluya yüklenmesi",
+  category: "Ödeme",
+  packs: ["kredi"],
+  severity: "MEDIUM",
+  patterns: [
+    "tahsil\s+masraf",
+    "takip\s+masraf",
+    "icra\s+masraf",
+    "avukatl[ıi]k\s+u[uü]cret",
+    "yarg[ıi]lama\s+gider",
+  ],
+  why:
+    "Gecikme halinde ana borcun üstüne masraf/ücret eklenebilir; toplam maliyet hızla artar.",
+  ask:
+    "Masraflar 'makul ve belgelendirilebilir' olsun; mümkünse üst sınır veya oran koy.",
+  packAdjust: { kredi: 0.9 },
+},
+
+// ---------------------------------------------------------------------------
+// SİGORTA / POLİÇE (sigorta)
+// ---------------------------------------------------------------------------
+{
+  id: "sigorta_genis_istisna",
+  title: "Kapsam dışı / istisna hükümleri geniş",
+  category: "Sözleşme Yönetimi",
+  packs: ["sigorta"],
+  severity: "MEDIUM",
+  patterns: ["kapsam\s+d[ıi][sş][ıi]", "teminat\s+d[ıi][sş][ıi]", "istisna", "\bhari[cç]\b"],
+  why:
+    "İstisnalar çok genişse, beklediğin teminat pratikte devreye girmeyebilir.",
+  ask:
+    "En kritik riskler için istisnaların daraltılmasını iste; 'teminat kapsamı' maddesini net örneklerle yazdır.",
+  packAdjust: { sigorta: 0.95 },
+},
+{
+  id: "sigorta_ihbar_suresi_kisa",
+  title: "Hasar/ihbar süresi çok kısa olabilir",
+  category: "Sözleşme Yönetimi",
+  packs: ["sigorta"],
+  severity: "HIGH",
+  patterns: [
+    "(hasar|riziko|ihbar|bildirim).{0,60}(24|48|72)\s*saat",
+    "(hasar|riziko|ihbar|bildirim).{0,60}\b(1|2|3)\s*g[uü]n\b",
+  ],
+  why:
+    "Çok kısa ihbar süresi, geç bildirimi gerekçe gösterip tazminatı reddetme riskini artırır.",
+  ask:
+    "Bildirim süresi makul olsun (örn. 7-15 gün) ve 'haklı sebep' varsa gecikmenin kabul edileceği açık yazılsın.",
+  packAdjust: { sigorta: 0.95 },
+},
+{
+  id: "sigorta_muafiyet_katilim",
+  title: "Muafiyet / katılım payı var",
+  category: "Ödeme",
+  packs: ["sigorta"],
+  severity: "MEDIUM",
+  patterns: ["muafiyet", "kat[ıi]l[ıi]m\s+pay[ıi]", "m[uü][sş]terek\s+sigorta"],
+  why:
+    "Muafiyet, hasarın belirli kısmını senin karşılaman demektir; beklenen korumayı azaltır.",
+  ask:
+    "Muafiyet tutarı/oranı açık yazılsın ve mümkünse düşürülsün; muafiyetin hangi hallerde uygulanacağı netleştirilsin.",
+  packAdjust: { sigorta: 0.95 },
+},
+{
+  id: "sigorta_fesih_tek_taraf",
+  title: "Sigortacının tek taraflı fesih/iptal yetkisi",
+  category: "Sözleşme Yönetimi",
+  packs: ["sigorta"],
+  severity: "HIGH",
+  patterns: [
+    "(sigortac[ıi]|[sş]irket).{0,80}(tek\s+tarafl[ıi]|diledi[gğ]inde).{0,80}(fesih|iptal)",
+    "poli[cç]e.{0,60}(tek\s+tarafl[ıi]).{0,60}(sonland[ıi]r|fesih|iptal)",
+  ],
+  why:
+    "Tek taraflı fesih, ihtiyaç anında teminatsız kalma riskini artırır.",
+  ask:
+    "Fesih ancak sınırlı ve objektif sebeplerle olsun; önceden bildirim ve prim iadesi şartları yazılsın.",
+  packAdjust: { sigorta: 0.95 },
+},
+{
+  id: "sigorta_prim_artisi",
+  title: "Prim/ücretin yenilemede belirsiz artabilmesi",
+  category: "Ödeme",
+  packs: ["sigorta"],
+  severity: "MEDIUM",
+  patterns: ["prim.{0,40}(art[ıi]r|de[gğ]i[sş]tir)", "yenileme.{0,60}prim"],
+  why:
+    "Yenilemede prim artışı öngörülemezse bütçe planlamak zorlaşır.",
+  ask:
+    "Prim değişim kriterleri (hasarsızlık, enflasyon vb.) açık yazılsın; sürpriz artışlarda fesih hakkın olsun.",
+  packAdjust: { sigorta: 0.9 },
+},
+
+// ---------------------------------------------------------------------------
+// ABONELİK / TAAHHÜT (abonelik)
+// ---------------------------------------------------------------------------
+{
+  id: "abonelik_cayma_bedeli",
+  title: "Cayma bedeli / erken fesih bedeli",
+  category: "Cezalar",
+  packs: ["abonelik"],
+  severity: "HIGH",
+  patterns: ["cayma\s+bedeli", "erken\s+fesih\s+bedeli", "taahh[uü]t.{0,40}cayma"],
+  why:
+    "Taahhüt bitmeden ayrılırsan ciddi bir bedel çıkabilir; toplam maliyet beklenenden yüksek olur.",
+  ask:
+    "Cayma bedeli hesabı net yazılsın (kalan indirimler gibi) ve mümkünse üst sınır konulsun.",
+  packAdjust: { abonelik: 0.85 },
+},
+{
+  id: "abonelik_otomatik_yenileme",
+  title: "Otomatik yenileme / süre uzaması",
+  category: "Sözleşme Yönetimi",
+  packs: ["abonelik"],
+  severity: "MEDIUM",
+  patterns: ["otomatik.{0,20}yenilen", "aksi\s+bildirilmedik[cç]e.{0,60}uzar", "yenileme\s+d[oö]nemi"],
+  why:
+    "Otomatik yenileme, istemeden yeni bir dönem/taahhüde girmene yol açabilir.",
+  ask:
+    "Yenileme için açık onay (opt-in) iste veya en azından kolay iptal + net hatırlatma süresi (örn. 15-30 gün) olsun.",
+  packAdjust: { abonelik: 0.9 },
+},
+{
+  id: "abonelik_fiyat_tek_taraf",
+  title: "Ücret/tarifenin tek taraflı değiştirilebilmesi",
+  category: "Ödeme",
+  packs: ["abonelik"],
+  severity: "MEDIUM",
+  patterns: [
+    "(u[uü]cret|fiyat|tarife).{0,80}(tek\s+tarafl[ıi]|diledi[gğ]inde).{0,80}(de[gğ]i[sş]tir|g[uü]ncelle)",
+    "(u[uü]cret|fiyat|tarife).{0,60}de[gğ]i[sş]tirilebilir",
+  ],
+  why:
+    "Tek taraflı ücret değişikliği, taahhüt boyunca maliyeti öngörülemez yapabilir.",
+  ask:
+    "Ücret değişikliği olursa cezasız fesih/taahhüt bozma hakkı yazılsın; bildirim süresi net olsun.",
+  packAdjust: { abonelik: 0.9 },
+},
+{
+  id: "abonelik_adil_kullanim_kisit",
+  title: "Hizmetin tek taraflı kısıtlanması (kota / hız düşürme vb.)",
+  category: "Sözleşme Yönetimi",
+  packs: ["abonelik"],
+  severity: "MEDIUM",
+  patterns: ["adil\s+kullan[ıi]m", "(h[ıi]z|kota).{0,60}(d[uü][sş][uü]r[uü]lebilir|s[ıi]n[ıi]rland[ıi]r[ıi]labilir)"],
+  why:
+    "Hizmet kalitesi tek taraflı düşürülebiliyorsa, fiilen aldığın hizmet değişebilir.",
+  ask:
+    "Kısıtlama şartları net olsun; ölçütler (kota, hız) açık yazılsın; aşımda alternatifler (paket yükseltme) sunulsun.",
+  packAdjust: { abonelik: 0.9 },
+},
+{
+  id: "abonelik_fatura_itiraz_suresi",
+  title: "Fatura itiraz süresi kısa olabilir",
+  category: "Sözleşme Yönetimi",
+  packs: ["abonelik"],
+  severity: "MEDIUM",
+  patterns: ["fatura.{0,60}itiraz.{0,20}\b(7|10|15)\s*g[uü]n\b"],
+  why:
+    "İtiraz süresi çok kısaysa, fark etmediğin bir hatalı fatura kesinleşebilir.",
+  ask:
+    "İtiraz süresi makul olsun (örn. 30 gün) ve itirazın inceleme süreci açık yazılsın.",
+  packAdjust: { abonelik: 0.9 },
+},
+
+// ---------------------------------------------------------------------------
+// ARAÇ / RENT A CAR (arac)
+// ---------------------------------------------------------------------------
+{
+  id: "arac_hasar_deger_kaybi",
+  title: "Hasar / değer kaybı ve ek masraflar geniş",
+  category: "Sorumluluk",
+  packs: ["arac"],
+  severity: "HIGH",
+  patterns: [
+    "de[gğ]er\s+kayb[ıi]",
+    "hasar.{0,80}(tazmin|bedel|u[uü]cret)",
+    "servis\s+bedeli",
+    "cekici|[cç]ekici",
+    "ikame\s+ara[cç]",
+  ],
+  why:
+    "Hasar/ek masraflar geniş yazılırsa küçük bir olayda bile yüksek tutarlar çıkabilir (değer kaybı, çekici, ikame araç vb.).",
+  ask:
+    "Masraf kalemleri tek tek yazılsın, belgelendirme şartı olsun ve mümkünse üst sınır/muafiyet netleştirilsin.",
+  packAdjust: { arac: 0.95 },
+},
+{
+  id: "arac_km_limit_asim",
+  title: "Kilometre limiti ve aşım ücreti",
+  category: "Ödeme",
+  packs: ["arac"],
+  severity: "MEDIUM",
+  patterns: ["(km|kilometre).{0,60}(limit|s[ıi]n[ıi]r).{0,60}(a[sş][ıi]m|fazla).{0,60}(u[uü]cret|bedel)"],
+  why:
+    "KM limiti düşükse veya aşım ücreti yüksekse toplam maliyet beklenenden fazla olabilir.",
+  ask:
+    "KM limiti ihtiyacına uygun olsun; aşım ücretleri açık yazılsın ve makul seviyede olsun.",
+  packAdjust: { arac: 0.95 },
+},
+{
+  id: "arac_depozito_iade_yok",
+  title: "Depozito/kaporanın iadesi kısıtlı olabilir",
+  category: "Ödeme",
+  packs: ["arac"],
+  severity: "MEDIUM",
+  patterns: ["depozito.{0,40}iade\s+edilmez", "kapora.{0,40}iade\s+edilmez", "depozito.{0,60}kesinti"],
+  why:
+    "Depozito iadesi belirsizse gereksiz kesintiler yaşanabilir.",
+  ask:
+    "Depozito iade süresi (örn. 7-14 gün) ve hangi hallerde ne kadar kesinti yapılacağı net yazılsın.",
+  packAdjust: { arac: 0.9 },
+},
+{
+  id: "arac_gps_izleme",
+  title: "Araçta konum takibi / izleme",
+  category: "Sözleşme Yönetimi",
+  packs: ["arac"],
+  severity: "MEDIUM",
+  patterns: ["\bgps\b", "konum\s+takip", "takip\s+sistemi", "telemetri"],
+  why:
+    "Konum takibi kişisel veri/mahremiyet açısından önemli olabilir; ayrıca kullanım kısıtları (bölge dışı vb.) doğurabilir.",
+  ask:
+    "Hangi verilerin toplandığı, saklama süresi ve amaç açık yazılsın; gereksiz izleme kaldırılabilsin.",
+  packAdjust: { arac: 0.9 },
+},
+{
+  id: "arac_sigorta_kapsam_sinirli",
+  title: "Sigorta/kasko kapsamı sınırlı veya muafiyetli olabilir",
+  category: "Sorumluluk",
+  packs: ["arac"],
+  severity: "MEDIUM",
+  patterns: ["(kasko|sigorta).{0,80}(kapsam\s+d[ıi][sş][ıi]|hari[cç]|muafiyet)"],
+  why:
+    "Kasko/sigorta kapsamı dar veya muafiyet yüksekse hasarın önemli kısmı sana kalabilir.",
+  ask:
+    "Kapsam, muafiyet ve istisnalar net yazılsın; mümkünse muafiyet düşürülsün.",
+  packAdjust: { arac: 0.95 },
+},
+
+// ---------------------------------------------------------------------------
+// SEYAHAT / TUR / OTEL (seyahat)
+// ---------------------------------------------------------------------------
+{
+  id: "seyahat_iptal_iade_yok",
+  title: "İptal/iade kısıtlı veya iadesiz",
+  category: "Cezalar",
+  packs: ["seyahat"],
+  severity: "HIGH",
+  patterns: [
+    "(iptal|vazge[cç]me|cayma).{0,80}(iade\s+yap[ıi]lmaz|u[uü]cret\s+iadesi\s+yok|iade\s+edilmez)",
+    "no\s+refund",
+  ],
+  why:
+    "İptal halinde iade yoksa plan değişikliğinde ciddi kayıp yaşanabilir.",
+  ask:
+    "İptal koşulları kademeli olsun (tarihe göre); en azından vergiler/harçlar gibi kalemler iade edilsin.",
+  packAdjust: { seyahat: 0.9 },
+},
+{
+  id: "seyahat_program_degisebilir",
+  title: "Program/otel/güzergah değişikliği tek taraflı",
+  category: "Sözleşme Yönetimi",
+  packs: ["seyahat"],
+  severity: "MEDIUM",
+  patterns: ["(program|g[uü]zergah|otel).{0,80}(de[gğ]i[sş]tirilebilir|de[gğ]i[sş]iklik\s+yapabilir|muadil)"],
+  why:
+    "Tek taraflı program/otel değişiklikleri, beklenti ve kaliteyi düşürebilir.",
+  ask:
+    "Değişiklik olursa muadil standardı (yıldız, konum vb.) yazılsın ve önemli değişiklikte ücretsiz iptal hakkın olsun.",
+  packAdjust: { seyahat: 0.9 },
+},
+{
+  id: "seyahat_ek_ucretler_haric",
+  title: "Ek ücretler / vergiler / harçlar dahil değil",
+  category: "Ödeme",
+  packs: ["seyahat"],
+  severity: "MEDIUM",
+  patterns: ["(ek\s+u[uü]cret|vergi|har[cç]|servis\s+bedeli).{0,60}(dahil\s+de[gğ]il|hari[cç])"],
+  why:
+    "Toplam fiyatı sonradan yükselten 'hariç' kalemler sürpriz maliyet doğurabilir.",
+  ask:
+    "Toplam fiyata dahil/hariç kalemler madde madde listelensin; hariç olanların yaklaşık tutarı yazılsın.",
+  packAdjust: { seyahat: 0.9 },
+},
+{
+  id: "seyahat_pasaport_vize_sorumluluk",
+  title: "Pasaport/vize sorumluluğu tamamen katılımcıya bırakılmış",
+  category: "Sözleşme Yönetimi",
+  packs: ["seyahat"],
+  severity: "MEDIUM",
+  patterns: ["(pasaport|vize).{0,80}sorumluluk", "(vize|pasaport).{0,80}(tamamen|m[uü][sş]teriye|kat[ıi]l[ıi]mc[ıi]ya)"],
+  why:
+    "Vize/pasaport sürecinde eksik bilgilendirme olursa hak kaybı yaşayabilirsin.",
+  ask:
+    "Gerekli belgeler ve süreler yazılsın; acente/otelin bilgilendirme yükümlülüğü netleştirilsin.",
+  packAdjust: { seyahat: 0.85 },
+},
+
+// ---------------------------------------------------------------------------
+// EĞİTİM / KURS / ATÖLYE (egitim)
+// ---------------------------------------------------------------------------
+{
+  id: "egitim_iade_yok",
+  title: "Ücret iadesi yok / çok kısıtlı",
+  category: "Ödeme",
+  packs: ["egitim"],
+  severity: "HIGH",
+  patterns: ["(iade|u[uü]cret\s+iadesi).{0,60}(yap[ıi]lmaz|edilmez|yoktur|m[uü]mk[uü]n\s+de[gğ]ildir)"],
+  why:
+    "Program değişikliği veya memnuniyetsizlikte iade yoksa maddi kayıp artar.",
+  ask:
+    "En azından belirli bir süre/ilk dersler içinde cayma-iade opsiyonu veya kısmi iade yazılsın.",
+  packAdjust: { egitim: 0.9 },
+},
+{
+  id: "egitim_program_degisebilir",
+  title: "Program/içerik/eğitmen değişikliği tek taraflı",
+  category: "Sözleşme Yönetimi",
+  packs: ["egitim"],
+  severity: "MEDIUM",
+  patterns: ["(program|i[cç]erik|e[gğ]itmen|tarih|saat).{0,80}(de[gğ]i[sş]tirilebilir|de[gğ]i[sş]iklik\s+yapabilir)"],
+  why:
+    "Tek taraflı değişiklikler, aldığın hizmetin kapsamını ve değerini etkileyebilir.",
+  ask:
+    "Büyük değişikliklerde ücretsiz iptal/iade hakkın olsun; değişiklikler için önceden bildirim zorunlu olsun.",
+  packAdjust: { egitim: 0.9 },
+},
+{
+  id: "egitim_devamsizlik_hak_kaybi",
+  title: "Devamsızlıkta hak kaybı / telafi yok",
+  category: "Sözleşme Yönetimi",
+  packs: ["egitim"],
+  severity: "MEDIUM",
+  patterns: ["(devams[ıi]zl[ıi]k|kat[ıi]lmama).{0,80}(hak\s+kayb[ıi]|telafi\s+yok|iade\s+yok)"],
+  why:
+    "Tek bir kaçırılan derste tüm hakkın yanması adil olmayabilir.",
+  ask:
+    "Telafi dersi/kayıt paylaşımı gibi seçenekler iste; en azından belirli sayıda telafi hakkı tanımlansın.",
+  packAdjust: { egitim: 0.85 },
+},
+{
+  id: "egitim_kurum_fesih",
+  title: "Kurumun tek taraflı fesih/çıkarma yetkisi",
+  category: "Sözleşme Yönetimi",
+  packs: ["egitim"],
+  severity: "MEDIUM",
+  patterns: ["(kurum|e[gğ]itim\s+kurumu|sa[gğ]lay[ıi]c[ıi]).{0,80}(tek\s+tarafl[ıi]|diledi[gğ]inde).{0,80}(fesih|sonland[ıi]r|kayd[ıi]n[ıi]\s+sil)"],
+  why:
+    "Tek taraflı fesih, ödediğin ücretin yanmasına veya eğitimin yarıda kalmasına yol açabilir.",
+  ask:
+    "Fesih sebepleri objektif olsun; fesih halinde kullanılmayan dönemin iadesi yazılsın.",
+  packAdjust: { egitim: 0.85 },
 }
 ];
 

@@ -57,6 +57,11 @@ const iyzicoCheckout = $("iyzicoCheckout");
 
 const riskScoreEl = $("riskScore");
 const riskLevelEl = $("riskLevel");
+const contractCheckTitleEl = $("contractCheckTitle");
+const contractCheckPillEl = $("contractCheckPill");
+const contractCheckSummaryEl = $("contractCheckSummary");
+const contractCheckListEl = $("contractCheckList");
+const contractCheckActionsEl = $("contractCheckActions");
 const metaLine = $("metaLine");
 const qualityLine = $("qualityLine");
 const issueCountEl = $("issueCount");
@@ -93,6 +98,9 @@ const actualGuestsRange = $("actualGuestsRange");
 const actualGuestsVal = $("actualGuestsVal");
 const cancelResult = $("cancelResult");
 const guestResult = $("guestResult");
+
+const marketBoxes = $("marketBoxes");
+const marketResult = $("marketResult");
 
 const historyEl = $("history");
 
@@ -820,6 +828,38 @@ function renderSimulation(simulation) {
   if (cancelDays && !cancelDays.value) cancelDays.value = "60";
 
   updateSim(ev);
+
+  // Market review
+  if (marketBoxes && marketResult) {
+    const market = sim.market;
+    if (!market || !market.available) {
+      marketBoxes.style.display = "none";
+      marketResult.textContent = "";
+    } else {
+      marketBoxes.style.display = "grid";
+      const parts = [];
+      if (market.summary) parts.push(`<div class="muted" style="margin-bottom:8px">${escapeHtml(market.summary)}</div>`);
+
+      if (Array.isArray(market.checks) && market.checks.length) {
+        const items = market.checks
+          .map((c) => {
+            const label = escapeHtml(c.label || "");
+            const value = escapeHtml(c.value || "");
+            const verdict = c.verdict ? ` <span class="badge">${escapeHtml(c.verdict)}</span>` : "";
+            const detail = c.detail ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.detail)}</div>` : "";
+            return `<li style="margin:6px 0"><b>${label}:</b> ${value}${verdict}${detail}</li>`;
+          })
+          .join("");
+        parts.push(`<ul style="margin:0; padding-left:18px">${items}</ul>`);
+      }
+
+      if (Array.isArray(market.caveats) && market.caveats.length) {
+        const cave = market.caveats.map((x) => `• ${escapeHtml(String(x))}`).join("<br>");
+        parts.push(`<div class="muted" style="margin-top:10px"><b>Not:</b><br>${cave}</div>`);
+      }
+      marketResult.innerHTML = parts.join("");
+    }
+  }
 }
 
 function guestRangeMax(guarantee, actual) {
@@ -936,8 +976,7 @@ function packLabel(pack) {
     case "kira": return "Kira";
     case "hizmet": return "Hizmet";
     case "is": return "İş";
-    case "nda": return "NDA/Gizlilik";
-    case "freelance": return "Freelance";
+    case "gizlilik": return "NDA / Gizlilik";
     case "saas": return "SaaS Abonelik";
     case "etkinlik": return "Düğün/Etkinlik";
     case "influencer": return "Influencer";
@@ -997,9 +1036,79 @@ function renderScoreExplain(summary) {
   }
 }
 
+function contractPillClass(color) {
+  switch (String(color || "").toLowerCase()) {
+    case "critical": return "pill pill-critical";
+    case "high": return "pill pill-high";
+    case "medium": return "pill pill-medium";
+    case "low":
+    default: return "pill pill-low";
+  }
+}
+
+function isCorrectnessSoftWarning(it) {
+  if (!it) return false;
+  if (it.category === "Tutarlılık") return true;
+  const ids = new Set([
+    "pack_mismatch",
+    "pack_suggestion",
+    "event_topic_mismatch",
+    "placeholders",
+    "role_mismatch",
+    "no_parties",
+    "no_signature",
+    "no_money",
+    "no_date",
+    "topic_suggest_arac",
+    "topic_maybe_not_arac",
+    "topic_maybe_not_employment",
+    "topic_maybe_not_nda",
+    "topic_suggest_saas",
+    "topic_suggest_abonelik",
+    "topic_maybe_not_travel",
+    "topic_maybe_not_insurance",
+    "topic_maybe_not_education",
+  ]);
+  return !!(it.id && ids.has(String(it.id)));
+}
+
+function renderContractCheck(summary, softWarnings) {
+  const cc = summary?.contractCheck || null;
+  const issues = Array.isArray(cc?.items) ? cc.items : [];
+  const actions = Array.isArray(cc?.actions) ? cc.actions : [];
+
+  if (contractCheckTitleEl) contractCheckTitleEl.textContent = cc?.label || "İmza öncesi kontrol et";
+  if (contractCheckPillEl) {
+    contractCheckPillEl.textContent = cc?.blockingCount > 0 ? `${cc.blockingCount} kritik kontrol` : `${issues.length || 0} kontrol notu`;
+    contractCheckPillEl.className = contractPillClass(cc?.color || "medium");
+  }
+  if (contractCheckSummaryEl) contractCheckSummaryEl.textContent = cc?.summary || "Sözleşmenin konusu, türü ve temel bilgileri genel olarak makul görünüyor.";
+
+  if (contractCheckListEl) {
+    if (!issues.length) {
+      contractCheckListEl.innerHTML = `<li>Bariz bir konu/tür/boş alan tutarsızlığı yakalanmadı.</li>`;
+    } else {
+      contractCheckListEl.innerHTML = issues.slice(0, 4).map((it) => {
+        const why = escapeHtml(String(it.why || ""));
+        const title = escapeHtml(String(it.title || "Kontrol et"));
+        return `<li><b>${title}:</b> ${why}</li>`;
+      }).join("");
+    }
+  }
+
+  if (contractCheckActionsEl) {
+    if (!actions.length) {
+      contractCheckActionsEl.innerHTML = `<li>İmza öncesi konu, taraf, tarih ve bedel alanlarını bir kez daha doğrula.</li>`;
+    } else {
+      contractCheckActionsEl.innerHTML = actions.slice(0, 3).map((a) => `<li>${escapeHtml(String(a))}</li>`).join("");
+    }
+  }
+}
+
 function renderAll(analysis, extracted) {
   const s = analysis.summary;
   const m = analysis.meta;
+  const visibleSoftWarnings = (analysis.softWarnings || []).filter((w) => !isCorrectnessSoftWarning(w));
 
   if (riskScoreEl) riskScoreEl.textContent = `${s.riskScore}/100`;
   if (riskLevelEl) riskLevelEl.textContent = `Seviye: ${s.riskLevel}`;
@@ -1021,14 +1130,15 @@ function renderAll(analysis, extracted) {
   }
 
   if (issueCountEl) issueCountEl.textContent = `${s.issueCount}`;
-  if (softCountEl) softCountEl.textContent = `${s.softWarningCount}`;
+  if (softCountEl) softCountEl.textContent = `${visibleSoftWarnings.length}`;
 
   renderScoreExplain(s);
+  renderContractCheck(s, analysis.softWarnings || []);
 
   renderTop3(analysis.topRisks || []);
   renderFilters(s);
   applyFilters();
-  renderSoft(analysis.softWarnings || []);
+  renderSoft(visibleSoftWarnings);
   renderSimulation(analysis.simulation || null);
 
   // Pazarlık kutusunu yeni analiz için sıfırla
@@ -1256,6 +1366,7 @@ function escapeRegExp(str) {
 
 function sevTr(sev) {
   switch (sev) {
+    case "INFO": return "BİLGİ";
     case "CRITICAL": return "KRİTİK";
     case "HIGH": return "YÜKSEK";
     case "MEDIUM": return "ORTA";

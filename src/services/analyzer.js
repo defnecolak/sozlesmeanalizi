@@ -1,12 +1,16 @@
 const crypto = require("crypto");
 const { RULES, SEVERITY_WEIGHT, SEVERITY_RANK } = require("./rules");
 const { extractEventMeta } = require("./eventSimulator");
+const { marketReviewForPack } = require("./marketReview");
 
 const PACK_ALIASES = {
   is: ["hizmet"],
   egitim: ["satis"],
   kredi: ["satis"],
   gizlilik: ["saas", "hizmet"],
+
+  // Etkinlik sözleşmeleri pratikte çoğu zaman "hizmet" sözleşmesi gibi işler
+  etkinlik: ["hizmet"],
 
   // Yeni türler: mevcut kuralların üzerine inşa eder
   abonelik: ["saas"],
@@ -266,7 +270,7 @@ function detectSozlesmeTuruUyumsuzlugu(textRaw, selectedPack) {
     title: isSuggestion
       ? "Sözleşme türü tahmini"
       : "Sözleşme türü seçimi uyuşmuyor olabilir",
-    severity: isSuggestion ? "low" : "medium",
+    severity: isSuggestion ? "INFO" : "MEDIUM",
     category: "Belirsizlik",
     why: isSuggestion
       ? `Bu metin, seçili tür \"Genel\" iken daha çok “${packLabelTR(bestPack)}” gibi görünüyor${hitText}. Türü seçip tekrar analiz edersen daha isabetli sonuç alırsın.`
@@ -275,6 +279,9 @@ function detectSozlesmeTuruUyumsuzlugu(textRaw, selectedPack) {
       "Sözleşme türünü doğru seçtiğinden emin ol.",
       "Yanlış seçtiysen türü değiştirip tekrar analiz et.",
     ],
+
+    // Bu uyarı bir tutarlılık/tahmin uyarısıdır; risk skorunu şişirmesin.
+    countsForScore: false,
   };
 }
 
@@ -356,23 +363,68 @@ function packFactor(pack) {
   return 1.0;
 }
 
+
+function packGamma(pack) {
+  // Skor kalibrasyonu: bazı sözleşme türlerinde (özellikle etkinlik/düğün)
+  // standart ama sert yazılmış maddeler çok sık görünüyor. "Hemen yüksek!" demek yerine
+  // skor eğrisini yumuşatıyoruz.
+  // gamma=1.0 => değişmez; gamma>1.0 => skor daha düşük çıkar (aynı puanda).
+  const key = String(pack || "genel").toLowerCase();
+  if (key === "etkinlik") return 1.35; // etkinlikte skor şişmesin ama 0’a da çökmesin
+  return 1.0;
+}
+
+function packBaselinePoints(pack) {
+  // Her tür için "normal" kabul edilen (çoğu sözleşmede zaten olan) risk yoğunluğunu
+  // sıfırdan saymak yerine hafifçe normalize ediyoruz.
+  const p = String(pack || "genel").toLowerCase();
+  const map = {
+    etkinlik: 12,
+    hizmet: 12,
+    genel: 10,
+    influencer: 12,
+    kira: 14,
+    satis: 12,
+    saas: 16,
+    is: 18,
+    kredi: 14,
+    egitim: 12,
+    gizlilik: 10,
+    abonelik: 14,
+    arac: 14,
+    seyahat: 14,
+    sigorta: 14,
+  };
+  return map[p] ?? 18;
+}
+
+
+
 function scoreFromPoints(points, pack, riskCount = 0, softCount = 0) {
   // Puanları 0-100'e çevirirken iki şeyi dengeleriz:
   // 1) Ham puan (ağırlıklar) → daha fazla puan daha yüksek risk
-  // 2) Yoğunluk → az sayıda maddeyle yüksek skor çıkmasını biraz yumuşat
+  // 2) Yoğunluk / kanıt → daha çok sinyal yakaladıkça skor biraz daha “kendinden emin” olur
   //
-  // Not: Bu bir "hukuki kesinlik" değil; kullanıcıya okunabilir bir özet skor.
-  const k = 130 * packFactor(pack); // önceki 95 biraz agresifti
-  const raw = 100 * (1 - Math.exp(-(Number(points || 0) / k)));
+  // Ek olarak: Her sözleşme türünde "doğası gereği" sık görülen bazı maddeler var.
+  // Bunları tamamen yok saymıyoruz ama skoru şişirmesin diye küçük bir baz çizgisi düşüyoruz.
+  const pts = Math.max(0, Number(points || 0));
 
-  const countEff = Math.max(
-    0,
-    Number(riskCount || 0) + Number(softCount || 0) * 0.35
-  );
-  const density = 0.75 + 0.25 * (1 - Math.exp(-(countEff / 6)));
+  const pf = packFactor(pack);
+  const gamma = packGamma(pack);
 
-  const adjusted = raw * density;
-  return Math.max(0, Math.min(100, Math.round(adjusted)));
+  const countEff = Math.max(1, riskCount + softCount * 0.6);
+  const density = Math.max(0.7, Math.min(1.25, countEff / 8));
+
+  const baseline = packBaselinePoints(pack);
+  // Baz çizgisi, çok düşük puanlarda skoru sıfırlamasın diye puanın belli bir yüzdesini aşmasın.
+  const safeBaseline = Math.min(baseline, pts * 0.6);
+  const adjPts = Math.max(0, pts - safeBaseline);
+
+  const k = 55 * pf * density;
+  const raw = 100 * (1 - Math.exp(-adjPts / k));
+
+  const score = Math.max(0, Math.min(100, Math.round(Math.pow(raw / 100, gamma) * 100)));
+  return score;
 }
 
 function occurrenceMultiplier(cnt, pack) {
@@ -389,6 +441,100 @@ function occurrenceMultiplier(cnt, pack) {
   // Diğer paketlerde tekrar, riski bir miktar artırabilir ama hızla doyguna ulaşmalı.
   return Math.min(1.55, 1 + (Math.log2(n) * 0.22));
 }
+
+
+// --- Bağlama duyarlı (context-aware) puan ayarlamaları ---
+// Amaç: "her gördüğümü kırmızıya boyayayım" yerine, sözleşme türüne göre daha gerçekçi bir skor.
+// Özellikle etkinlik/düğün sözleşmelerinde bazı sert kalıplar çok standart: puanı biraz yumuşatırız.
+
+function _norm(s) {
+  return String(s || "").toLowerCase();
+}
+
+function _hasAny(t, needles) {
+  const s = _norm(t);
+  return (needles || []).some((n) => s.includes(String(n)));
+}
+
+function _extractPercents(t) {
+  const s = _norm(t);
+  const out = [];
+  let m;
+  const r1 = /%\s*(\d{1,3}(?:[\.,]\d+)?)/g;
+  while ((m = r1.exec(s))) out.push(parseFloat(m[1].replace(",", ".")));
+  const r2 = /(\d{1,3}(?:[\.,]\d+)?)\s*%/g;
+  while ((m = r2.exec(s))) out.push(parseFloat(m[1].replace(",", ".")));
+  return out.filter((n) => Number.isFinite(n) && n >= 0 && n <= 100);
+}
+
+function _hasCapLanguage(t) {
+  return _hasAny(t, [
+    "üst sınır",
+    "ust sınır",
+    "azami",
+    "limit",
+    "ile sınırl",
+    "sınırlıdır",
+    "sinirlidir",
+    "toplam bedel",
+    "sözleşme bedeli",
+    "sozlesme bedeli",
+  ]);
+}
+
+function _excludesIndirectDamage(t) {
+  const s = _norm(t);
+  const idx = Math.max(s.indexOf("dolaylı"), s.indexOf("dolayli"));
+  if (idx < 0) return false;
+  const win = s.slice(Math.max(0, idx - 40), Math.min(s.length, idx + 80));
+  return (
+    win.includes("hariç") ||
+    win.includes("haric") ||
+    win.includes("dahil değildir") ||
+    win.includes("dahil degildir") ||
+    win.includes("dahil değil") ||
+    win.includes("dahil degil")
+  );
+}
+
+function contextAdjust(ruleId, sample, pack) {
+  const p = _norm(pack);
+  const quote = _norm((sample && (sample.quoteFull || sample.quote || sample.snippet)) || "");
+  if (!quote) return 1.0;
+
+  let m = 1.0;
+
+  if (p === "etkinlik") {
+    // 1) Sınırsız sorumluluk / dolaylı zarar
+    if (ruleId === "unlimited_liability") {
+      m *= 0.72;
+      if (_hasCapLanguage(quote)) m *= 0.65;
+      if (_excludesIndirectDamage(quote)) m *= 0.70;
+    }
+
+    // 2) Cezai şart / cayma bedeli: yüzdeye göre şiddeti ayarla
+    if (ruleId === "penalty_clause") {
+      m *= 0.85;
+      const perc = _extractPercents(quote);
+      if (perc.length) {
+        const mx = Math.max(...perc);
+        if (mx <= 20) m *= 0.65;
+        else if (mx <= 35) m *= 0.80;
+        else if (mx <= 50) m *= 0.90;
+      }
+    }
+
+    // 3) Alt yüklenici / üçüncü kişi kullanımı
+    if (ruleId === "third_party_unlimited") {
+      m *= 0.80;
+      if (_hasAny(quote, ["yazılı izin", "yazili izin", "onay"])) m *= 0.85;
+    }
+  }
+
+  // Güvenli aralık (aşırı oynamasın)
+  return Math.max(0.35, Math.min(1.35, m));
+}
+
 
 
 function makeSnippet(text, index, length = 220) {
@@ -602,6 +748,631 @@ function detectEtkinlikKonuUyumsuzlugu(text) {
   return null;
 }
 
+// -------------------------------------------
+// Pack'e göre “konu / içerik” tutarlılık kontrolleri
+//
+// Amaç:
+// - Kullanıcı yanlış dosya yüklediyse (veya metin içinde bariz başka bir konu varsa)
+//   bunu erken yakalayıp uyarı vermek.
+// - Skoru şişirmemek için bu uyarılar *puan eklemez* (sadece bilgi/uyarı).
+// -------------------------------------------
+
+function _countAny(textNorm, needles) {
+  let c = 0;
+  for (const n of needles) {
+    if (!n) continue;
+    const nn = foldTR(String(n).toLowerCase());
+    if (nn && textNorm.includes(nn)) c++;
+  }
+  return c;
+}
+
+function detectPackTopicHints(text, pack) {
+  const t = foldTR(String(text || "").toLowerCase());
+  const hints = [];
+
+  // 1) Etkinlik özel: düğün yerine kurumsal/başka etkinlik yazılmış olabilir
+  if (pack === "etkinlik") {
+    const konu = detectEtkinlikKonuUyumsuzlugu(text);
+    if (konu) {
+      const ev = konu.evidence && konu.evidence.length ? ` (örn. ${konu.evidence.join(", ")})` : "";
+      hints.push({
+        id: "event_topic_mismatch",
+        title: "Etkinlik konusu tutarsız olabilir",
+        severity: konu.level || "MEDIUM",
+        category: "Tutarlılık",
+        why: `${konu.message}${ev}`,
+        quote: konu.quote || undefined,
+        templates: [
+          "Etkinlik konusu/başlığı (ne etkinliği/kutlaması) net ve doğru yazılsın.",
+          "Sözleşmenin tamamında etkinlik adı/türü, tarih ve taraflar aynı şekilde geçsin.",
+          "Eğer bu bir düğün sözleşmesi ise, metindeki etkinlik tanımı düğün/nikah ile uyumlu hale getirilsin.",
+        ],
+      });
+    }
+    return hints.map((h) => ({ countsForScore: false, ...h }));
+  }
+
+  // 2) Araç sinyali: plaka/şasi/ruhsat vb.
+  const aracSignals = [
+    "plaka",
+    "şasi",
+    "sasi",
+    "ruhsat",
+    "kilometre",
+    "km ",
+    "motor",
+    "kasko",
+    "trafik sigortası",
+    "muayene",
+    "satış tescil",
+    "noter",
+  ];
+  const aracScore = _countAny(t, aracSignals);
+
+  // 3) Gayrimenkul / tapu sinyali
+  const tapuSignals = [
+    "tapu",
+    "ada",
+    "parsel",
+    "taşınmaz",
+    "tasınmaz",
+    "kat irtifakı",
+    "kat mülkiyeti",
+    "iskan",
+  ];
+  const tapuScore = _countAny(t, tapuSignals);
+
+  // 4) İş sözleşmesi sinyali
+  const isSignals = [
+    "işveren",
+    "isveren",
+    "işçi",
+    "isci",
+    "sgk",
+    "maaş",
+    "maas",
+    "ücret bordro",
+    "çalışma süresi",
+    "mesai",
+    "yıllık izin",
+    "ihbar",
+    "kıdem",
+  ];
+  const isScore = _countAny(t, isSignals);
+
+  // 5) Abonelik / üyelik sinyali (SaaS olmayan üyelikler dahil)
+  const abonelikSignals = [
+    "abonelik",
+    "üyelik",
+    "uyelik",
+    "yenileme",
+    "otomatik yenile",
+    "iptal",
+    "cayma",
+  ];
+  const abonelikScore = _countAny(t, abonelikSignals);
+
+  // 6) SaaS / dijital hizmet sinyali
+  const saasSignals = [
+    "saas",
+    "api",
+    "endpoint",
+    "uptime",
+    "sla",
+    "hizmet seviyesi",
+    "kullanıcı hesab",
+    "veri işleme",
+    "data processing",
+    "kullanım şart",
+  ];
+  const saasScore = _countAny(t, saasSignals);
+
+  // 7) Gizlilik / NDA sinyali
+  const ndaSignals = [
+    "gizli bilgi",
+    "gizlilik",
+    "confidential",
+    "nda",
+    "non-disclosure",
+    "ifşa",
+    "ifsa",
+  ];
+  const ndaScore = _countAny(t, ndaSignals);
+
+  // 8) Seyahat sinyali
+  const seyahatSignals = [
+    "otel",
+    "rezervasyon",
+    "uçuş",
+    "ucus",
+    "tur",
+    "vize",
+    "check-in",
+    "check out",
+  ];
+  const seyahatScore = _countAny(t, seyahatSignals);
+
+  // 9) Sigorta sinyali
+  const sigortaSignals = [
+    "poliçe",
+    "police",
+    "prim",
+    "teminat",
+    "muafiyet",
+    "hasar",
+    "rücu",
+    "rucu",
+  ];
+  const sigortaScore = _countAny(t, sigortaSignals);
+
+  // 10) Eğitim sinyali
+  const egitimSignals = [
+    "öğrenci",
+    "ogrenci",
+    "kurs",
+    "eğitim",
+    "egitim",
+    "ders",
+    "sertifika",
+    "kayıt ücreti",
+  ];
+  const egitimScore = _countAny(t, egitimSignals);
+
+  // Pack'e göre “ben aslında başka bir şeye benziyorum” uyarıları
+  // (özellikle kullanıcı yanlış tür seçmiş ama pack_mismatch eşiğini geçmemiş olabilir)
+  // Not: Bunlar yumuşak uyarı; puan eklemiyoruz.
+
+  if (pack === "kira" && aracScore >= 3) {
+    hints.push({
+      id: "topic_suggest_arac",
+      title: "Bu metin araçla ilgili olabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde plaka/ruhsat/şasi gibi araç sinyalleri var. Eğer bu bir araç kiralama/satış metniyse ‘Araç’ türünü seçmek daha doğru olur.",
+      templates: ["Sözleşme türünü kontrol et: Kira mı, araç mı?", "Araçla ilgiliyse plaka/şasi/teslim-iade şartlarını netleştir."],
+    });
+  }
+
+  if (pack === "satis" && aracScore >= 3) {
+    hints.push({
+      id: "topic_suggest_arac",
+      title: "Bu satış metni araç satışı olabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde plaka/ruhsat/şasi gibi araç sinyalleri var. Araç satışıysa ‘Araç’ türü daha isabetli analiz verir.",
+      templates: ["Araç satışında plaka/şasi, hasar kaydı ve devir/tescil akışını netleştir."],
+    });
+  }
+
+  if (pack === "arac" && tapuScore >= 2) {
+    hints.push({
+      id: "topic_maybe_not_arac",
+      title: "Bu metin araçla ilgili olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde tapu/ada/parsel gibi gayrimenkul sinyalleri var. Yanlış dosya yüklenmiş olabilir.",
+      templates: ["Sözleşme türünü ve yüklenen dosyayı kontrol et."],
+    });
+  }
+
+  if (pack === "is" && isScore < 2 && ndaScore + saasScore + abonelikScore + tapuScore + aracScore >= 4) {
+    hints.push({
+      id: "topic_maybe_not_employment",
+      title: "Bu metin iş sözleşmesi olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "İş sözleşmesi sinyalleri zayıf (SGK/maaş/mesai/izin gibi) ama başka sözleşme sinyalleri güçlü. Yanlış tür/dosya seçilmiş olabilir.",
+      templates: ["Eğer bu bir hizmet/freelance ilişkisi ise ‘Hizmet Sözleşmesi’ türü daha uygun olur.", "İş sözleşmesi ise ücret, çalışma süresi, izin ve fesih hükümlerini netleştir."],
+    });
+  }
+
+  if (pack === "gizlilik" && ndaScore < 2) {
+    hints.push({
+      id: "topic_maybe_not_nda",
+      title: "Bu metin NDA/Gizlilik olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde ‘gizli bilgi / gizlilik / confidential’ gibi temel gizlilik sinyalleri zayıf görünüyor. Yanlış tür/dosya seçilmiş olabilir.",
+      templates: ["Gizlilik sözleşmesi ise gizli bilginin tanımı, kapsamı ve istisnaları net olsun."],
+    });
+  }
+
+  if (pack === "abonelik" && saasScore >= 3 && abonelikScore >= 2) {
+    hints.push({
+      id: "topic_suggest_saas",
+      title: "Bu metin SaaS/Dijital hizmet aboneliği gibi",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde API/SLA/veri işleme gibi dijital hizmet sinyalleri var. SaaS türü daha iyi analiz verebilir.",
+      templates: ["SLA/uptime, veri işleme (KVKK/GDPR) ve hizmet kesintisi hükümlerini kontrol et."],
+    });
+  }
+
+  if (pack === "saas" && abonelikScore >= 4 && saasScore < 2) {
+    hints.push({
+      id: "topic_suggest_abonelik",
+      title: "Bu metin daha çok genel abonelik/üyelik gibi",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Metinde abonelik/iptal/yenileme sinyalleri var ama API/SLA gibi SaaS sinyalleri zayıf. Genel abonelik türü daha uygun olabilir.",
+      templates: ["İptal/yenileme ve ücret değişikliği kurallarını netleştir."],
+    });
+  }
+
+  if (pack === "seyahat" && seyahatScore < 2 && (aracScore + tapuScore + saasScore + ndaScore + isScore) >= 4) {
+    hints.push({
+      id: "topic_maybe_not_travel",
+      title: "Bu metin seyahat sözleşmesi olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Seyahat sinyalleri zayıf ama başka sözleşme sinyalleri güçlü. Yanlış dosya/tür seçilmiş olabilir.",
+      templates: ["Yüklenen dosyayı ve sözleşme türünü kontrol et."],
+    });
+  }
+
+  if (pack === "sigorta" && sigortaScore < 2 && (aracScore + tapuScore + saasScore + ndaScore + abonelikScore + isScore) >= 4) {
+    hints.push({
+      id: "topic_maybe_not_insurance",
+      title: "Bu metin sigorta sözleşmesi olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Sigorta sinyalleri zayıf ama başka sözleşme sinyalleri güçlü. Yanlış dosya/tür seçilmiş olabilir.",
+      templates: ["Yüklenen dosyayı ve sözleşme türünü kontrol et."],
+    });
+  }
+
+  if (pack === "egitim" && egitimScore < 2 && (saasScore + abonelikScore + ndaScore + isScore) >= 4) {
+    hints.push({
+      id: "topic_maybe_not_education",
+      title: "Bu metin eğitim sözleşmesi olmayabilir",
+      severity: "INFO",
+      category: "Tutarlılık",
+      why: "Eğitim sinyalleri zayıf ama başka sözleşme sinyalleri güçlü. Yanlış dosya/tür seçilmiş olabilir.",
+      templates: ["Yüklenen dosyayı ve sözleşme türünü kontrol et."],
+    });
+  }
+
+  return hints.map((h) => ({ countsForScore: false, ...h }));
+}
+
+// ------------------------------------------------------------
+// “Sözleşme doğru mu?” kontrolleri (tüm türlerde)
+// Bu kontroller puan eklemez; sadece uyarı üretir.
+// ------------------------------------------------------------
+
+function extractSubjectSnippet(text) {
+  const t = String(text || "");
+  const lines = t.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const patterns = [
+    /sözleşmenin\s+konusu\s*[:\-–]?\s*(.{10,220})/i,
+    /konu\s*[:\-–]\s*(.{10,220})/i,
+    /subject\s*[:\-–]\s*(.{10,220})/i,
+  ];
+  for (const line of lines) {
+    for (const re of patterns) {
+      const m = line.match(re);
+      if (m && m[1]) return m[1].trim();
+    }
+  }
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m && m[1]) return m[1].trim();
+  }
+  return null;
+}
+
+function detectTemplatePlaceholders(text) {
+  const t = String(text || "");
+  const hits = [];
+  const rules = [
+    { id: "blank_underscores", re: /_{4,}/g },
+    { id: "blank_dots", re: /\.{5,}/g },
+    { id: "blank_brackets", re: /\[(\s*)\]/g },
+    { id: "blank_curly", re: /\{\{\s*\w*\s*\}\}/g },
+    { id: "placeholder_adsoyad", re: /(ad\s*soyad\s*[:\-–]?\s*$|ad\s*soyad\s*[:\-–]?\s*\.+)/gim },
+    { id: "placeholder_tckn", re: /(t\.?\s*c\.?\s*kimlik|tckn|tc\s*no)\s*[:\-–]?\s*$|((t\.?\s*c\.?\s*kimlik|tckn|tc\s*no)\s*[:\-–]?\s*\.+)/gim },
+  ];
+  for (const r of rules) {
+    const m = t.match(r.re);
+    if (m && m.length) hits.push(r.id);
+  }
+  if (/(lorem\s+ipsum|\bTBD\b|\bTO\s*BE\s*DECIDED\b|\bFILL\s*IN\b)/i.test(t)) hits.push("placeholder_text");
+  return Array.from(new Set(hits));
+}
+
+function inferRoleFromText(text) {
+  const t = String(text || "");
+  const counts = {
+    hizmet_alan: 0,
+    hizmet_veren: 0,
+    kiraci: 0,
+    ev_sahibi: 0,
+    alici: 0,
+    satici: 0,
+  };
+
+  const bump = (key, re) => {
+    const m = t.match(re);
+    if (!m) return;
+    counts[key] += m.length;
+  };
+
+  // Kira
+  bump("kiraci", /(\bkiracı\b|\bkiraci\b|tenant|lessee)/ig);
+  bump("ev_sahibi", /(kiraya\s+veren|mal\s+sahibi|ev\s+sahibi|landlord|lessor)/ig);
+
+  // Satış
+  bump("alici", /(\balıcı\b|\balici\b|buyer|purchaser)/ig);
+  bump("satici", /(\bsatıcı\b|\bsatici\b|seller|vendor)/ig);
+
+  // Hizmet
+  bump("hizmet_alan", /(hizmet\s+alan|müşteri|musteri|iş\s*sahibi|davet\s*sahibi|client)/ig);
+  bump("hizmet_veren", /(hizmet\s+veren|sağlayıcı|saglayici|yüklenici|yuklenici|provider|contractor|supplier)/ig);
+
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const [topRole, topCount] = entries[0];
+  const second = entries[1]?.[1] ?? 0;
+
+  if (topCount <= 1) return { role: null, strength: 0, counts };
+  if (topCount === second) return { role: null, strength: 0, counts };
+
+  const strength = Math.min(1, (topCount - second) / Math.max(2, topCount));
+  return { role: topRole, strength, counts };
+}
+
+function detectRoleMismatch(text, selectedRole) {
+  const sel = String(selectedRole || "genel");
+  if (!sel || sel === "genel") return null;
+  const guess = inferRoleFromText(text);
+  if (!guess.role) return null;
+  if (guess.role === sel) return null;
+  if (guess.strength < 0.35) return null;
+
+  const nice = {
+    hizmet_alan: "Hizmet Alan",
+    hizmet_veren: "Hizmet Veren",
+    kiraci: "Kiracı",
+    ev_sahibi: "Ev Sahibi",
+    alici: "Alıcı",
+    satici: "Satıcı",
+    genel: "Genel",
+  };
+
+  return {
+    id: "role_mismatch",
+    title: "Rol seçimi ile metnin dili uyuşmuyor olabilir",
+    severity: "MEDIUM",
+    category: "Tutarlılık",
+    why: `Seçtiğin rol ‘${nice[sel] || sel}’ ama metin daha çok ‘${nice[guess.role] || guess.role}’ tarafın diliyle yazılmış görünüyor. Rol yanlış seçildiyse analiz yanlış yere odaklanabilir; rol doğruysa sözleşmede taraf tanımlarını netleştir.`,
+    templates: [
+      "Taraf tanımlarını (Hizmet Alan/Hizmet Veren veya Alıcı/Satıcı vb.) başta net yazalım.",
+      "Sözleşme boyunca taraf isimleri/tanımları tutarlı kullanılsın.",
+    ],
+    points: 0,
+    countsForScore: false,
+  };
+}
+
+function detectMissingEssentials(text, pack) {
+  const t = String(text || "");
+  const warnings = [];
+
+  const hasMoney = /(\d{1,3}(?:[\.,]\d{3})*(?:[\.,]\d{1,2})?\s*(₺|TL|TRY|€|EUR|USD|\$)|\b(₺|TL|TRY|€|EUR|USD)\b)/i.test(t)
+    || /\b(bedel|ücret|ucret|tutar|fiyat|ödeme|odeme|taksit|depozito|kapora|cayma)\b/i.test(t);
+  const hasDate = /(\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b|\b\d{1,2}\s*(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\s*\d{2,4}\b)/i.test(t);
+  const hasParties = /(\btaraflar\b|\btaraf\b|\balıcı\b|\bsatıcı\b|\bkiracı\b|kiraya\s+veren|işveren|işçi|müşteri|hizmet\s+alan|hizmet\s+veren|davet\s+sahibi)/i.test(t);
+  const hasSignature = /(imza|imzalan|imzalanmıştır|imzalanmistir|ıslak\s+imza|kaşe|kase)/i.test(t);
+
+  if (!hasParties) {
+    warnings.push({
+      id: "no_parties",
+      title: "Taraf tanımı net değil",
+      severity: "LOW",
+      category: "Tutarlılık",
+      why: "Metinde ‘taraflar/alıcı-satıcı/kiracı-kiraya veren’ gibi net taraf tanımları zayıf görünüyor. İmza öncesi taraflar ve unvanlar açık yazılmalı.",
+      templates: ["Tarafların adı/ünvanı/adresi başta net yazılsın."],
+      points: 0,
+      countsForScore: false,
+    });
+  }
+
+  if (!hasSignature) {
+    warnings.push({
+      id: "no_signature",
+      title: "İmza/kaşe bölümü görünmüyor olabilir",
+      severity: "LOW",
+      category: "Tutarlılık",
+      why: "Metinde imza/kaşe alanına dair net bir bölüm göremedim. Bu bir taslak olabilir veya metin çıkarımında eksik kalmış olabilir.",
+      templates: ["İmza sayfası/alanı eklensin; tarih ve imza yerleri belli olsun."],
+      points: 0,
+      countsForScore: false,
+    });
+  }
+
+  const moneyOptional = new Set(["gizlilik"]);
+  if (!moneyOptional.has(pack) && pack !== "genel" && !hasMoney) {
+    warnings.push({
+      id: "no_money",
+      title: "Bedel/ücret bilgisi net değil",
+      severity: "MEDIUM",
+      category: "Tutarlılık",
+      why: "Metinde bedel/ücret/ödeme tutarı net görünmüyor. Sözleşmelerde en çok sorun çıkaran yer burası; rakamlar ve ödeme planı açık olmalı.",
+      templates: ["Toplam bedel, ödeme takvimi ve varsa depozito/kapora net yazılsın."],
+      points: 0,
+      countsForScore: false,
+    });
+  }
+
+  const dateRequired = new Set(["etkinlik", "seyahat", "egitim"]);
+  if (dateRequired.has(pack) && !hasDate) {
+    warnings.push({
+      id: "no_date",
+      title: "Tarih/süre bilgisi net değil",
+      severity: "MEDIUM",
+      category: "Tutarlılık",
+      why: "Bu tür sözleşmelerde tarih/süre kritik. Metinde net bir tarih/süre bilgisi göremedim.",
+      templates: ["Başlangıç-bitiş tarihi/saat aralığı net yazılsın."],
+      points: 0,
+      countsForScore: false,
+    });
+  }
+
+  return warnings;
+}
+
+function buildCorrectnessChecks(text, pack, role) {
+  const t = String(text || "");
+  const out = [];
+
+  const ph = detectTemplatePlaceholders(t);
+  if (ph.length) {
+    out.push({
+      id: "placeholders",
+      title: "Sözleşmede boş bırakılmış alanlar olabilir",
+      severity: "MEDIUM",
+      category: "Tutarlılık",
+      why: "Metin içinde boş alan/şablon izleri tespit ettim (örn. ‘____’, ‘.....’, ‘[ ]’). İmza öncesi tüm alanların doldurulduğundan emin ol.",
+      templates: ["Boş alanları dolduralım; isim/ünvan/adres/bedel/tarih gibi bilgiler eksik kalmasın."],
+      points: 0,
+      countsForScore: false,
+    });
+  }
+
+  const rm = detectRoleMismatch(t, role);
+  if (rm) out.push(rm);
+
+  out.push(...detectMissingEssentials(t, pack));
+
+  // Bilgi amaçlı: yakalanırsa ileride farklı türler için de kullanılabilir.
+  void extractSubjectSnippet(t);
+
+  return out;
+}
+
+const CORRECTNESS_WARNING_IDS = new Set([
+  "pack_mismatch",
+  "pack_suggestion",
+  "event_topic_mismatch",
+  "placeholders",
+  "role_mismatch",
+  "no_parties",
+  "no_signature",
+  "no_money",
+  "no_date",
+  "topic_suggest_arac",
+  "topic_maybe_not_arac",
+  "topic_maybe_not_employment",
+  "topic_maybe_not_nda",
+  "topic_suggest_saas",
+  "topic_suggest_abonelik",
+  "topic_maybe_not_travel",
+  "topic_maybe_not_insurance",
+  "topic_maybe_not_education",
+]);
+
+function isCorrectnessWarning(w) {
+  if (!w) return false;
+  if (w.category === "Tutarlılık") return true;
+  if (w.id && CORRECTNESS_WARNING_IDS.has(String(w.id))) return true;
+  return false;
+}
+
+function buildContractCheckSummary(softWarnings, pack, role) {
+  const warnings = (softWarnings || []).filter(isCorrectnessWarning);
+  const mediumOrAbove = warnings.filter((w) => ["CRITICAL", "HIGH", "MEDIUM"].includes(String(w.severity || "")));
+  const infoCount = warnings.length - mediumOrAbove.length;
+
+  let status = "ok";
+  let label = "Genel olarak uyumlu görünüyor";
+  let color = "low";
+  let summary = "Bariz bir sözleşme türü / konu / taraf tutarsızlığı yakalanmadı. Yine de imzadan önce ana bilgileri bir kez kontrol et.";
+
+  if (mediumOrAbove.length >= 2) {
+    status = "fix";
+    label = "İmzadan önce düzelt";
+    color = "critical";
+    summary = "Sözleşme konusu, türü veya temel bilgileri tarafında birden fazla ciddi tutarsızlık/eksiklik görünüyor. Önce bunları düzeltmek daha doğru.";
+  } else if (mediumOrAbove.length === 1 || infoCount >= 2) {
+    status = "review";
+    label = "İmzadan önce kontrol et";
+    color = "medium";
+    summary = "Metin genel olarak kullanılabilir görünüyor ama konu/tür/boş alan/rol gibi alanlarda yeniden gözden geçirilmesi gereken noktalar var.";
+  }
+
+  const top = warnings
+    .slice()
+    .sort((a, b) => (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0))
+    .slice(0, 4)
+    .map((w) => ({
+      id: w.id || "",
+      title: w.title,
+      severity: w.severity,
+      why: w.why,
+      templates: Array.isArray(w.templates) ? w.templates : [],
+    }));
+
+  const actions = [];
+  for (const w of top) {
+    for (const t of (w.templates || [])) {
+      if (actions.length >= 3) break;
+      if (!actions.includes(t)) actions.push(t);
+    }
+    if (actions.length >= 3) break;
+  }
+
+  return {
+    status,
+    label,
+    color,
+    summary,
+    warningCount: warnings.length,
+    blockingCount: mediumOrAbove.length,
+    pack,
+    role,
+    items: top,
+    actions,
+  };
+}
+
+function computeOverlapReduction({ groupedIssues, softWarnings, rulePointsById, pack }) {
+  const ids = new Set((groupedIssues || []).map((it) => it.id));
+  const softIds = new Set((softWarnings || []).map((w) => w.id).filter(Boolean));
+  const reductions = [];
+  let total = 0;
+
+  const addReduction = (amount, reason) => {
+    const n = Math.max(0, Math.round((Number(amount) || 0) * 10) / 10);
+    if (!n) return;
+    total += n;
+    reductions.push({ amount: n, reason });
+  };
+
+  const pts = (id) => Number(rulePointsById[id] || 0);
+
+  if (ids.has("penalty_clause") && ids.has("no_refund")) {
+    addReduction(Math.min(6, pts("no_refund") * 0.45), "Cayma/ceza ile iadesiz ödeme aynı finansal riski kısmen tekrar ediyor.");
+  }
+
+  if (pack === "etkinlik" && ids.has("penalty_clause") && ids.has("cancel_deadline")) {
+    addReduction(Math.min(5, pts("cancel_deadline") * 0.60), "Etkinlik sözleşmelerinde iptal tablosu + erken bildirim şartı tek paketin parçaları olabilir.");
+  }
+
+  if (ids.has("unlimited_liability") && softIds.has("liability_cap_missing")) {
+    addReduction(2, "Sorumluluk limiti yok uyarısı, sınırsız sorumluluk riskinin alt başlığı gibi çalışıyor.");
+  }
+
+  if (ids.has("unlimited_liability") && ids.has("indemnity")) {
+    addReduction(Math.min(6, Math.min(pts("unlimited_liability"), pts("indemnity")) * 0.35), "Sınırsız sorumluluk ve geniş tazmin kısmen aynı zarar kümesini sayıyor olabilir.");
+  }
+
+  if ((pack === "saas" || pack === "abonelik") && ids.has("auto_renew") && ids.has("cancel_deadline")) {
+    addReduction(Math.min(4, pts("cancel_deadline") * 0.35), "Otomatik yenileme ile iptal süresi şartı birbirini kısmen tekrar ediyor.");
+  }
+
+  return { total, reductions };
+}
+
 function formatMoney(amount, currency = "EUR") {
   const n = Number(amount);
   if (!Number.isFinite(n)) return null;
@@ -778,6 +1549,33 @@ function analyzeContract(rawText, opts = {}) {
 
   const groupedIssues = Object.values(groupedMap);
 
+  // ------------------------------------------------------------
+  // Zekileştirme: bağlamdan daha iyi açıklama üret (puanı bozma)
+  // ------------------------------------------------------------
+  // Etkinlik sözleşmelerinde “dolaylı zarar / tazmin” ifadeleri çoğu zaman
+  // davetlilerin veya senin seçtiğin üçüncü kişilerin (dekor, ses-ışık, foto vb.)
+  // vereceği zararlar için sorumluluğu geniş tutan standart bir maddeye işaret eder.
+  // Bu durumda kullanıcıya daha doğru ve sakin bir açıklama verelim.
+  if (pack === "etkinlik") {
+    for (const it of groupedIssues) {
+      if (it.id !== "unlimited_liability") continue;
+      const q = String(it.quote || "");
+      const qFold = q.toLowerCase();
+      const thirdPartyCtx = /(davetli|katılımcı|üçüncü\s*kişi|alt\s*yüklenici|taşeron|organizasyon|dekor|ses\s*-?\s*ışık|fotoğraf|video|dj|müzik|ekip|tedarikçi)/i.test(q);
+      const jointLiability = /(müteselsil|müştereken)/i.test(q);
+      if (thirdPartyCtx || jointLiability) {
+        it.why = "Bu madde, davetlilerin veya senin seçtiğin üçüncü kişilerin vereceği zararlarda sorumluluğu geniş tutuyor. Tutar öngörüsü zor olabilir.";
+        it.redLine = "Sorumluluğu sadece doğrudan ve ispatlı zararlarla sınırla; makul bir üst limit (cap) ve mümkünse sigorta/teminat şartı eklet.";
+        // Pazarlık metni daha net olsun: 3. kişi bağlamı
+        it.templates = [
+          "Sorumluluk sadece doğrudan ve ispatlı zararlarla sınırlı olsun; dolaylı zarar/kar kaybı hariç tutulsun.",
+          "Davetli/taşeron kaynaklı zararlar için makul bir üst sınır (cap) ve sigorta/teminat şartı eklenmesini rica ediyorum.",
+          "Müteselsil sorumluluk varsa, sadece kendi kusurumla sınırlı olacak şekilde daraltılmasını rica ediyorum."
+        ];
+      }
+    }
+  }
+
   // Score with role multiplier
   const perRuleCounts = {};
   for (const it of groupedIssues) perRuleCounts[it.id] = Math.max(1, Number(it.occurrences || 1));
@@ -791,7 +1589,8 @@ function analyzeContract(rawText, opts = {}) {
     const rule = RULES.find(r => r.id === rid) || {};
     const rm = roleMultiplier(rule, role);
     const packAdj = (rule.packAdjust && typeof rule.packAdjust === "object" && rule.packAdjust[pack]) ? Number(rule.packAdjust[pack]) : 1.0;
-    const pts = (w * mult * rm * (Number.isFinite(packAdj) ? packAdj : 1.0));
+    const ctxAdj = contextAdjust(rid, sample, pack);
+    const pts = (w * mult * rm * (Number.isFinite(packAdj) ? packAdj : 1.0) * ctxAdj);
     rulePointsById[rid] = pts;
     riskPoints += pts;
   }
@@ -839,14 +1638,21 @@ if (!hasDisputeWords) {
 const hasLiabilityWords = /(sorumluluk|tazmin|indemnif|zarar)/i.test(text);
 const hasCapWords = /(azami\s+sorumluluk|üst\s+sınır|sorumluluk\s+limiti|cap\b|maximum\s+liability|toplam\s+sorumluluk)/i.test(text);
 if (hasLiabilityWords && !hasCapWords) {
+  // Zekice puanlama: “sınırsız sorumluluk / tazmin” gibi bir risk zaten yakalandıysa
+  // ayrıca “cap yok” diye yüksek puan eklemek çoğu zaman aynı sorunu iki kere sayar.
+  // Uyarıyı koruyalım ama puanı ve şiddeti düşürelim.
+  const hasLiabilityRisk = groupedIssues.some(it => ["unlimited_liability", "indemnity"].includes(it.id));
+  const capPoints = hasLiabilityRisk ? 2 : 10;
   softWarnings.push({
+    id: "liability_cap_missing",
     title: "Sorumluluk üst limiti yazmıyor olabilir",
-    severity: "HIGH",
+    severity: hasLiabilityRisk ? "MEDIUM" : "HIGH",
     category: "Belirsizlik",
     why: "Sorumluluk limiti yoksa, beklenmedik büyük tutarlar çıkabilir.",
-    templates: ["Sorumluluk için üst limit (cap) iste (örn. toplam bedel kadar)."]
+    templates: ["Sorumluluk için üst limit (cap) iste (örn. toplam bedel kadar)."],
+    points: capPoints
   });
-  riskPoints += 10;
+  riskPoints += capPoints;
 }
 
 const hasConf = /(gizli\s+bilgi|gizlilik|confidential)/i.test(text);
@@ -869,25 +1675,22 @@ if (packTypeWarn) {
   softWarnings.unshift(packTypeWarn);
 }
 
-// Etkinlik sözleşmelerinde "konu" tutarlılığı: düğün yerine başka bir etkinlik yazılmış olabilir
-if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch")) {
-  const konu = detectEtkinlikKonuUyumsuzlugu(text);
-  if (konu) {
-    const ev = konu.evidence && konu.evidence.length ? ` (örn. ${konu.evidence.join(", ")})` : "";
-    softWarnings.unshift({
-      id: "event_topic_mismatch",
-      title: "Etkinlik konusu tutarsız olabilir",
-      severity: konu.level || "MEDIUM",
-      category: "Tutarlılık",
-      why: `${konu.message}${ev}`,
-      quote: konu.quote || undefined,
-      templates: [
-        "Etkinlik konusu/başlığı (ne etkinliği/kutlaması) net ve doğru yazılsın.",
-        "Sözleşmenin tamamında etkinlik adı/türü, tarih ve taraflar aynı şekilde geçsin.",
-        "Eğer bu bir düğün sözleşmesi ise, metindeki etkinlik tanımı düğün/nikah ile uyumlu hale getirilsin.",
-      ],
-    });
-    // Not: Bu bir tutarlılık uyarısı; skoru şişirmemek için puan eklemiyoruz.
+// Pack'e göre konu/tutarlılık kontrolleri (puan eklemez)
+// Yanlış tür seçimi netse zaten pack_mismatch uyarısı gösterilir; yine de konu ipuçlarını göstermek faydalı olabilir.
+const topicHints = detectPackTopicHints(text, pack);
+if (topicHints && topicHints.length) {
+  // en önemli gibi görünenler üstte çıksın
+  for (let i = topicHints.length - 1; i >= 0; i--) {
+    softWarnings.unshift(topicHints[i]);
+  }
+}
+
+// “Sözleşme doğru mu?” kontrolleri (boş alan / rol / temel bilgiler)
+// Puan eklemez; sadece uyarı üretir.
+const correctnessChecks = buildCorrectnessChecks(text, pack, role);
+if (correctnessChecks && correctnessChecks.length) {
+  for (let i = correctnessChecks.length - 1; i >= 0; i--) {
+    softWarnings.unshift(correctnessChecks[i]);
   }
 }
 
@@ -905,16 +1708,25 @@ if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch"
     riskPoints += 6;
   }
 
+  const correctnessSummary = buildContractCheckSummary(softWarnings, pack, role);
+
   // Her risk maddesine, skoru ne kadar etkilediğini (puan) ekleyelim.
   for (const it of groupedIssues) {
     it.scorePoints = Number(rulePointsById[it.id] || 0);
+  }
+
+  const overlapReduction = computeOverlapReduction({ groupedIssues, softWarnings, rulePointsById, pack });
+  if (overlapReduction.total > 0) {
+    riskPoints = Math.max(0, riskPoints - overlapReduction.total);
+    // Kullanıcıya açıklanabilsin diye düşülen puanı info olarak summary'ye taşıyacağız.
   }
 
   // Seviye hesaplaması için şiddet sayımları
   const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   for (const it of groupedIssues) severityCounts[it.severity] = (severityCounts[it.severity] || 0) + 1;
 
-  const riskScore = scoreFromPoints(riskPoints, pack, groupedIssues.length, softWarnings.length);
+  const softCountForScore = softWarnings.filter((w) => w && w.countsForScore !== false).length;
+  const riskScore = scoreFromPoints(riskPoints, pack, groupedIssues.length, softCountForScore);
   const levelInfo = getLevelFromScore(riskScore, severityCounts);
 
   groupedIssues.sort((a, b) => {
@@ -953,13 +1765,15 @@ if (pack === "etkinlik" && !(packTypeWarn && packTypeWarn.id === "pack_mismatch"
   const factorLines = [];
   if (critHigh > 0) factorLines.push(`${critHigh} adet kritik/yüksek risk sinyali bulundu.`);
   if (topDrivers.length) factorLines.push(`Skoru en çok artıran maddeler: ${topDrivers.map(d => d.title).join(" • ")}.`);
-  if (softWarnings.length) factorLines.push(`${softWarnings.length} adet eksik/belirsiz alan sinyali skoru artırdı.`);
+  const scoreSoftCount = softWarnings.filter(w => w && w.countsForScore !== false && Number(w.points || 0) > 0).length;
+  if (scoreSoftCount > 0) factorLines.push(`${scoreSoftCount} adet eksik/belirsiz alan sinyali skoru artırdı.`);
 
   const scoreExplain = {
     meaning: "Bu skor bir tehlike alarmı veya ‘imzala/imzalama’ kararı değildir. Sözleşme dilinde senin aleyhine işleyebilecek maddelerin yoğunluğunu ve şiddetini yaklaşık olarak gösterir.",
     factors: factorLines.slice(0, 3),
     topDrivers,
-    withoutTopDriversScore
+    withoutTopDriversScore,
+    overlapReduction
   };
 
 // Simülasyonlar (ör. Düğün/Etkinlik maliyet)
@@ -967,7 +1781,8 @@ let simulation = null;
 let eventMeta = null;
 if (pack === "etkinlik") {
   eventMeta = extractEventMeta(text);
-  simulation = { event: eventMeta };
+  const market = marketReviewForPack(pack, eventMeta);
+  simulation = { event: eventMeta, market };
 }
 
 
@@ -995,7 +1810,8 @@ return {
       quality: quality ? { label: quality.label, score: quality.score } : null,
       categoryCounts,
       severityCounts,
-      scoreExplain
+      scoreExplain,
+      contractCheck: correctnessSummary
     },
     topRisks,
     issues: groupedIssues,

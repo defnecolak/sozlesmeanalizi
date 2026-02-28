@@ -27,8 +27,8 @@
     }catch(e){}
   })();
 </script>
-<link rel="stylesheet" href="/public/styles.css?v=17" />
-<script src="/public/theme.js?v=17" defer></script>
+<link rel="stylesheet" href="/public/styles.css?v=27" />
+<script src="/public/theme.js?v=27" defer></script>
 </head>
 <body>
   <header class="topnav">
@@ -169,6 +169,27 @@
         </div>
       </div>
 
+      <div class="contract-check" id="contractCheckCard">
+        <div class="contract-check-head">
+          <div>
+            <div class="muted small">Sözleşme Doğruluk Kontrolü</div>
+            <div class="contract-check-title" id="contractCheckTitle">—</div>
+          </div>
+          <div class="pill" id="contractCheckPill">—</div>
+        </div>
+        <div class="muted small" id="contractCheckSummary">—</div>
+        <div class="contract-check-grid">
+          <div>
+            <div class="muted small">Öne çıkan kontrol noktaları</div>
+            <ul class="contract-check-list" id="contractCheckList"></ul>
+          </div>
+          <div>
+            <div class="muted small">İmza öncesi yapılacaklar</div>
+            <ul class="contract-check-list" id="contractCheckActions"></ul>
+          </div>
+        </div>
+      </div>
+
       <div class="score-grid">
         <div class="score-box">
           <div class="muted small" title="Bu skor, tespit edilen risk türleri ve şiddetine göre hesaplanan yaklaşık bir göstergedir.">Risk Skoru</div>
@@ -242,6 +263,13 @@
       <div class="sim-title">Kişi Sayısı Senaryosu</div>
       <div id="guestResult" class="sim-body">—</div>
     </div>
+  <div class="sim-boxes" id="marketBoxes" style="display:none; margin-top:12px;">
+    <div class="sim-box">
+      <div class="sim-title">Piyasa Kontrolü (yaklaşık)</div>
+      <div id="marketResult" class="sim-body">—</div>
+    </div>
+  </div>
+
   </div>
 
   <div class="muted small">
@@ -333,6 +361,6 @@
     window.__CSP_NONCE__ = "<%= cspNonce %>";
     window.__CHECKOUT_PACKS__ = <%- JSON.stringify(checkoutPacks || []) %>;
   </script>
-  <script src="/public/app.js?v=19"></script>
+  <script src="/public/app.js?v=27"></script>
 </body>
 </html>

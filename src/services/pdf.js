@@ -44,9 +44,36 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
   doc.text(`Risk Skoru: ${s.riskScore}/100 (Seviye: ${s.riskLevel || "-"})`);
   if (s.quality?.label) doc.text(`Metin Kalitesi: ${s.quality.label}`);
 
+  const contractCheck = s?.contractCheck || null;
+  if (contractCheck?.label) {
+    doc.text(`Doğruluk Kontrolü: ${contractCheck.label}`);
+  }
+
   doc.fontSize(10).fillColor("#444").text(`Analiz zamanı: ${m.analyzedAt || "-"}`);
   doc.fillColor("#000").fontSize(11);
   doc.moveDown();
+
+  if (contractCheck) {
+    doc.font("DejaVuBold").fontSize(14).text("Sözleşme Doğruluk Kontrolü", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11);
+    if (contractCheck.summary) doc.text(contractCheck.summary);
+    const items = Array.isArray(contractCheck.items) ? contractCheck.items : [];
+    if (items.length) {
+      doc.moveDown(0.2);
+      items.slice(0, 4).forEach((it) => {
+        doc.text(`• ${truncate(String(it.title || ""), 90)}: ${truncate(String(it.why || ""), 220)}`);
+      });
+    }
+    const actions = Array.isArray(contractCheck.actions) ? contractCheck.actions : [];
+    if (actions.length) {
+      doc.moveDown(0.2);
+      doc.font("DejaVuBold").fontSize(11).text("İmza öncesi yapılacaklar:");
+      doc.font("DejaVu").fontSize(11);
+      actions.slice(0, 3).forEach((a) => doc.text(`• ${truncate(String(a), 200)}`));
+    }
+    doc.moveDown(0.5);
+  }
 
   // Skor açıklaması (explainability)
   const exScore = s?.scoreExplain || null;

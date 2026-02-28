@@ -95,6 +95,16 @@ function extractEventMeta(text) {
     if (m) perPersonVatIncl = parseMoneyTR(m[1]);
   }
 
+  // Interest / late fee (monthly, heuristic)
+  const interestMonthly = (() => {
+    // Try to find a monthly % near 'temerrüt'/'gecikme' wording.
+    const m = t.match(/(?:temerr[uü]t|gecikme)\s*(?:faizi|faiz)\s*[:\-]?[^%\n]{0,80}%\s*(\d+(?:[.,]\d+)?)/i)
+      || t.match(/ayl[ıi]k\s*%\s*(\d+(?:[.,]\d+)?)[^\n]{0,40}(?:temerr[uü]t|gecikme)/i);
+    if (!m) return null;
+    const v = Number(String(m[1]).replace(',', '.'));
+    return Number.isFinite(v) ? v : null;
+  })();
+
   // Payment schedule (amount - date pairs)
   const paymentSchedule = [];
   {
@@ -188,6 +198,7 @@ function extractEventMeta(text) {
     total: totalAmount ? { amount: totalAmount, currency: currency || "EUR" } : null,
     guarantee: guarantee || null,
     perPersonVatIncl: perPersonVatIncl || null,
+    interestMonthly: interestMonthly || null,
     perPersonFromTotal,
     paymentSchedule,
     cancellationTable
