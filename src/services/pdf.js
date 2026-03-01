@@ -1,5 +1,28 @@
 const PDFDocument = require("pdfkit");
+const NegotiationCopy = require("../public/negotiation-copy");
 const path = require("path");
+
+
+function packLabel(pack) {
+  switch (String(pack || "genel")) {
+    case "genel": return "Genel";
+    case "hizmet": return "Hizmet / Serbest Çalışma";
+    case "influencer": return "Influencer Anlaşması";
+    case "etkinlik": return "Düğün / Etkinlik";
+    case "kira": return "Kira";
+    case "satis": return "Satış / Alım";
+    case "saas": return "SaaS / Yazılım Aboneliği";
+    case "is": return "İş Sözleşmesi";
+    case "kredi": return "Kredi / Borç";
+    case "egitim": return "Eğitim / Kurs";
+    case "gizlilik": return "Gizlilik / NDA";
+    case "abonelik": return "Abonelik / Taahhüt";
+    case "arac": return "Araç Kiralama";
+    case "seyahat": return "Seyahat / Tur / Otel";
+    case "sigorta": return "Sigorta / Poliçe";
+    default: return String(pack || "Genel");
+  }
+}
 
 function sevTR(sev) {
   switch (sev) {
@@ -41,38 +64,105 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
 
   if (ex.fileName) doc.text(`Dosya: ${ex.fileName}`);
   doc.text(`Rol: ${roleLabel(s.role)}`);
+  if (s.pack) doc.text(`Tür: ${packLabel(s.pack)}`);
+  if (s.sensitivity) doc.text(`Hassasiyet: ${s.sensitivity}`);
   doc.text(`Risk Skoru: ${s.riskScore}/100 (Seviye: ${s.riskLevel || "-"})`);
   if (s.quality?.label) doc.text(`Metin Kalitesi: ${s.quality.label}`);
 
-  const contractCheck = s?.contractCheck || null;
-  if (contractCheck?.label) {
-    doc.text(`Doğruluk Kontrolü: ${contractCheck.label}`);
+  const correctness = s?.correctness || null;
+  if (correctness?.status) {
+    doc.text(`Doğruluk Kontrolü: ${correctness.status}`);
   }
 
   doc.fontSize(10).fillColor("#444").text(`Analiz zamanı: ${m.analyzedAt || "-"}`);
   doc.fillColor("#000").fontSize(11);
   doc.moveDown();
 
-  if (contractCheck) {
-    doc.font("DejaVuBold").fontSize(14).text("Sözleşme Doğruluk Kontrolü", { underline: true });
+  if (s?.counterpartyContext?.summary) {
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(14).text("Karşı Taraf / İlişki Bağlamı", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(s.counterpartyContext.summary);
+    doc.moveDown(0.25);
+  }
+
+  if (correctness) {
+    doc.moveDown(0.4);
+    doc.font("DejaVuBold").fontSize(14).text("Sözleşme Doğru mu?", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(correctness.message || "");
+    if (Array.isArray(correctness.items) && correctness.items.length) {
+      doc.moveDown(0.15);
+      correctness.items.slice(0, 5).forEach((it) => doc.text(`• ${truncate(String(it.title || ""), 220)}`));
+    }
+    doc.moveDown(0.35);
+  }
+
+  const actionPlan = s?.actionPlan || null;
+  if (actionPlan) {
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(14).text("İmza Öncesi Plan", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(actionPlan.summary || "");
+    const sections = [
+      ["Önce düzelt", actionPlan.mustFix],
+      ["Netleştir", actionPlan.shouldClarify],
+      ["Dengeleyici sinyaller", actionPlan.goodSignals]
+    ];
+    sections.forEach(([title, items]) => {
+      if (Array.isArray(items) && items.length) {
+        doc.moveDown(0.15);
+        doc.font("DejaVuBold").fontSize(11).text(title);
+        doc.font("DejaVu").fontSize(11);
+        items.slice(0, 4).forEach((it) => doc.text(`• ${truncate(String(it || ""), 240)}`));
+      }
+    });
+    doc.moveDown(0.35);
+  }
+
+  const decision = s?.decision || analysis?.decision || null;
+  if (decision) {
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(14).text("Karar Önerisi", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(11).text(decision.status || "KONTROL ET");
+    doc.font("DejaVu").fontSize(11).text(decision.summary || "");
+    if (Array.isArray(decision.reasons) && decision.reasons.length) {
+      doc.moveDown(0.15);
+      decision.reasons.slice(0, 4).forEach((it) => doc.text(`• ${truncate(String(it || ""), 240)}`));
+    }
+    if (Array.isArray(decision.nextSteps) && decision.nextSteps.length) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text("Sonraki adım");
+      doc.font("DejaVu").fontSize(11);
+      decision.nextSteps.slice(0, 3).forEach((it) => doc.text(`• ${truncate(String(it || ""), 240)}`));
+    }
+    doc.moveDown(0.35);
+  }
+
+  const subScores = Array.isArray(s?.subScores || analysis?.subScores) ? (s.subScores || analysis.subScores) : [];
+  if (subScores.length) {
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(14).text("Alt Skorlar", { underline: true });
     doc.moveDown(0.35);
     doc.font("DejaVu").fontSize(11);
-    if (contractCheck.summary) doc.text(contractCheck.summary);
-    const items = Array.isArray(contractCheck.items) ? contractCheck.items : [];
-    if (items.length) {
-      doc.moveDown(0.2);
-      items.slice(0, 4).forEach((it) => {
-        doc.text(`• ${truncate(String(it.title || ""), 90)}: ${truncate(String(it.why || ""), 220)}`);
-      });
-    }
-    const actions = Array.isArray(contractCheck.actions) ? contractCheck.actions : [];
-    if (actions.length) {
-      doc.moveDown(0.2);
-      doc.font("DejaVuBold").fontSize(11).text("İmza öncesi yapılacaklar:");
-      doc.font("DejaVu").fontSize(11);
-      actions.slice(0, 3).forEach((a) => doc.text(`• ${truncate(String(a), 200)}`));
-    }
-    doc.moveDown(0.5);
+    subScores.slice(0, 5).forEach((it) => {
+      doc.text(`${String(it.label || "")} : ${Number(it.score || 0)}/100`);
+      if (it.summary) doc.fontSize(10).fillColor("#444").text(truncate(String(it.summary || ""), 240)).fillColor("#000").fontSize(11);
+      doc.moveDown(0.15);
+    });
+    doc.moveDown(0.25);
+  }
+
+  const mitigationSummary = s?.mitigationSummary || null;
+  if (mitigationSummary) {
+    doc.moveDown(0.35);
+    doc.font("DejaVuBold").fontSize(14).text("Dengeleyici Maddeler", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(mitigationSummary.message || "");
+    const mitItems = Array.isArray(mitigationSummary.items) ? mitigationSummary.items : [];
+    mitItems.slice(0, 5).forEach((it) => doc.text(`• ${truncate(String(it.title || ""), 240)}`));
+    doc.moveDown(0.25);
   }
 
   // Skor açıklaması (explainability)
@@ -99,6 +189,12 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
       doc.moveDown(0.15);
       doc.fontSize(10).fillColor("#444").text(`Bu 3 madde olmasa skor yaklaşık ${exScore.withoutTopDriversScore}/100 olurdu.`);
       doc.fillColor("#000").fontSize(11);
+    }
+    if (Array.isArray(exScore.combos) && exScore.combos.length) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text("Birlikte çalışan madde kombinasyonları:");
+      doc.font("DejaVu").fontSize(11);
+      exScore.combos.slice(0, 3).forEach((c) => doc.text(`• ${truncate(String(c.title || ""), 220)}`));
     }
     doc.moveDown(0.3);
   }
@@ -130,25 +226,63 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
   }
 
 
-  // Pazarlık çıktısı (kopyala-yapıştır)
+  const redlines = Array.isArray(analysis?.redlinePlaybook) ? analysis.redlinePlaybook : [];
+  if (redlines.length) {
+    doc.moveDown(0.25);
+    doc.font("DejaVuBold").fontSize(14).text("Redline / Revize Önerileri", { underline: true });
+    doc.moveDown(0.35);
+    redlines.slice(0, 4).forEach((it, idx) => {
+      doc.font("DejaVuBold").fontSize(11).text(`${idx + 1}. ${truncate(String(it.clause || "İlgili madde"), 120)}`);
+      doc.font("DejaVu").fontSize(11).text(truncate(String(it.title || ""), 220));
+      if (it.reason) doc.fontSize(10).fillColor("#444").text(truncate(String(it.reason || ""), 220)).fillColor("#000").fontSize(11);
+      doc.text(`İstek: ${truncate(String(it.ask || ""), 240)}`);
+      doc.text(`İdeal madde mantığı: ${truncate(String(it.idealClause || ""), 240)}`);
+      doc.moveDown(0.25);
+    });
+  }
+
+  const whatIf = Array.isArray(analysis?.whatIf?.items) ? analysis.whatIf.items : [];
+  if (whatIf.length) {
+    doc.moveDown(0.25);
+    doc.font("DejaVuBold").fontSize(14).text("What-if / Olası Sonuçlar", { underline: true });
+    doc.moveDown(0.35);
+    whatIf.slice(0, 4).forEach((it, idx) => {
+      doc.font("DejaVuBold").fontSize(11).text(`${idx + 1}. ${truncate(String(it.title || ""), 180)}`);
+      doc.font("DejaVu").fontSize(11).text(truncate(String(it.outcome || ""), 240));
+      if (it.impact) doc.fontSize(10).fillColor("#444").text(`Etkisi: ${truncate(String(it.impact || ""), 120)}`).fillColor("#000").fontSize(11);
+      if (it.why) doc.fontSize(10).fillColor("#444").text(truncate(String(it.why || ""), 220)).fillColor("#000").fontSize(11);
+      doc.moveDown(0.25);
+    });
+  }
+
+  // Revize metni (karşı tarafa gönderilebilir özet)
   const neg = (analysis?.issues || []).slice(0, 8);
   doc.moveDown();
-  doc.font("DejaVuBold").fontSize(14).text("Pazarlık Çıktısı (kopyala-yapıştır)", { underline: true });
+  doc.font("DejaVuBold").fontSize(14).text("Karşı Tarafa Gönderilebilir Revize Metni", { underline: true });
   doc.moveDown(0.4);
   doc.font("DejaVu").fontSize(11);
 
   if (!neg.length) {
     doc.text("—");
   } else {
-    neg.forEach((it, idx) => {
-      doc.font("DejaVuBold").fontSize(11).text(`${idx + 1}. ${it.title}`);
-      doc.font("DejaVu").fontSize(10);
-      const lines = negotiationLines(it);
-      lines.forEach(l => doc.text(l));
-      doc.moveDown(0.5);
+    const fullDoc = String(
+      NegotiationCopy.buildDoc(neg, {
+        role: s.role || "genel",
+        pack: s.pack || "genel",
+      }) || ""
+    ).trim();
+
+    const paragraphs = fullDoc.split(/\n\n+/).map((x) => x.trim()).filter(Boolean);
+    paragraphs.forEach((p) => {
+      if (p.length && /^[A-ZÇĞİÖŞÜ][^.!?\n]{0,50}$/.test(p) && !/\.$/.test(p)) {
+        doc.font("DejaVuBold").fontSize(11).text(p);
+        doc.font("DejaVu").fontSize(11);
+      } else {
+        doc.text(p);
+      }
+      doc.moveDown(0.35);
       if (doc.y > 730) doc.addPage();
     });
-    doc.font("DejaVu").fontSize(11);
   }
 
 
@@ -292,41 +426,14 @@ function isMoneyUnknown(moneyImpact) {
   return s.includes("değişken") || s.includes("hesaplanamad") || s.includes("net hesap");
 }
 
-function negotiationLines(it) {
-  // PDF tarafında da başlık yerine mümkünse sadece madde numarası göster.
-  const clauseRaw = it?.clause ? String(it.clause).trim() : "";
-  const clauseLabel = clauseRaw ? clauseRaw.replace(/^[\s(]+|[\s)]+$/g, "").trim() : "";
-  const title = (it?.title || "—").toString().trim();
-  const refLabel = clauseLabel || `“${title}”`;
-  const why = truncate(it?.why || "Bu madde benim için gereksiz risk oluşturuyor.", 240);
-
-  const rawMoney = String(it?.moneyImpact || "").trim();
-  const money = (!rawMoney || isMoneyUnknown(rawMoney)) ? "" : truncate(rawMoney, 180);
-
-  const templates = Array.isArray(it?.templates)
-    ? it.templates.map(cleanTemplate).filter(Boolean).slice(0, 3)
-    : [];
-
-  const asks = templates.length
-    ? templates
-    : ["Bu maddeyi daha net ve dengeli olacak şekilde revize edelim"];
-
-  const lines = [];
-  lines.push(`Sözleşmedeki ${refLabel} maddesi için küçük bir revize rica edeceğim.`);
-  lines.push(`Kısaca: ${why}`);
-  if (money) lines.push(`Parasal etki (tahmini): ${money}`);
-  const askSentences = asks
-    .map((t) => {
-      const s = truncate(t, 240).trim();
-      if (!s) return "";
-      return /[.!?…]$/.test(s) ? s : `${s}.`;
-    })
-    .filter(Boolean)
-    .join(" ");
-  lines.push(`Rica ettiğim güncelleme: ${askSentences}`);
-  lines.push("Uygunsa buna göre güncelleyebilir miyiz?");
-  lines.push("Teşekkürler.");
-  return lines;
+function negotiationLines(it, opts = {}) {
+  const txt = NegotiationCopy.buildIssueText(it, {
+    role: opts.role || 'genel',
+    pack: opts.pack || 'genel',
+    includeGreeting: false,
+    includeClosing: false,
+  });
+  return String(txt || '').split(/\n\n+/).map((x) => x.trim()).filter(Boolean);
 }
 
 

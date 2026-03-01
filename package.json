@@ -1,15 +1,17 @@
 {
   "name": "avukatim",
-  "version": "2.4.1",
+  "version": "2.6.0",
   "description": "Sözleşme Risk Tarayıcı: role-based scoring + clause parsing + OCR + PDF report (TR unicode font).",
   "main": "src/index.js",
   "scripts": {
     "dev": "node src/index.js",
     "start": "node src/index.js",
-    "test": "node tests/run.js",
+    "test": "node tests/run.js && node scripts/options-matrix.mjs && node scripts/scoring-sanity.mjs",
     "smoke": "node scripts/smoke.mjs",
     "security:headers": "node scripts/security-headers.mjs",
-    "security:audit": "npm audit --omit=dev"
+    "security:audit": "npm audit --omit=dev",
+    "test:matrix": "node scripts/options-matrix.mjs",
+    "test:scoring": "node scripts/scoring-sanity.mjs"
   },
   "dependencies": {
     "compression": "^1.7.4",

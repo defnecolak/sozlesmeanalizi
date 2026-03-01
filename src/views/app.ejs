@@ -27,8 +27,8 @@
     }catch(e){}
   })();
 </script>
-<link rel="stylesheet" href="/public/styles.css?v=27" />
-<script src="/public/theme.js?v=27" defer></script>
+<link rel="stylesheet" href="/public/styles.css?v=35" />
+<script src="/public/theme.js?v=35" defer></script>
 </head>
 <body>
   <header class="topnav">
@@ -70,33 +70,34 @@
 
       <div class="grid3">
         <label class="label">
-          Rol (skoru etkiler)
+          Rol (bakış açısını etkiler)
           <select id="role" class="select">
             <% roles.forEach(r => { %>
               <option value="<%= r.id %>"><%= r.label %></option>
             <% }) %>
           </select>
+          <div class="muted small fieldhint" id="roleHelp"><%= appMeta.roleHelpers?.genel || "" %></div>
         </label>
 
         <label class="label">
           Sözleşme Türü
           <select id="pack" class="select">
-            <option value="genel">Genel</option>
-            <option value="hizmet">Hizmet / Freelancer</option>
-            <option value="influencer">Influencer Anlaşması</option>
-            <option value="etkinlik">Düğün / Etkinlik</option>
-            <option value="kira">Kira</option>
-            <option value="satis">Alım-Satım</option>
-            <option value="saas">SaaS / Üyelik</option>
-            <option value="is">İş Sözleşmesi</option>
-            <option value="kredi">Kredi / Borç</option>
-            <option value="egitim">Eğitim / Kurs</option>
-            <option value="gizlilik">Gizlilik / KVKK (NDA)</option>
-            <option value="abonelik">Abonelik / Taahhüt (Telefon-İnternet)</option>
-            <option value="arac">Araç Kiralama</option>
-            <option value="seyahat">Seyahat / Tur / Otel</option>
-            <option value="sigorta">Sigorta / Poliçe</option>
+            <% packOptions.forEach(p => { %>
+              <option value="<%= p.id %>"><%= p.label %></option>
+            <% }) %>
           </select>
+          <div class="muted small fieldhint" id="packHelp"><%= appMeta.packHelpers?.genel || "" %></div>
+          <div class="muted small fieldhint" id="packExamples">Örnekler: <%= (appMeta.packExamples?.genel || []).join(", ") %></div>
+        </label>
+
+        <label class="label">
+          Analiz Hassasiyeti
+          <select id="sensitivity" class="select">
+            <% (sensitivityOptions || []).forEach(s => { %>
+              <option value="<%= s.id %>" <%= s.id === "dengeli" ? "selected" : "" %>><%= s.label %></option>
+            <% }) %>
+          </select>
+          <div class="muted small fieldhint" id="sensitivityHelp"><%= appMeta.sensitivityHelpers?.dengeli || "" %></div>
         </label>
 
         <label class="label">
@@ -169,26 +170,98 @@
         </div>
       </div>
 
-      <div class="contract-check" id="contractCheckCard">
-        <div class="contract-check-head">
-          <div>
-            <div class="muted small">Sözleşme Doğruluk Kontrolü</div>
-            <div class="contract-check-title" id="contractCheckTitle">—</div>
-          </div>
-          <div class="pill" id="contractCheckPill">—</div>
+      <section class="correctness-box hidden" id="correctnessBox">
+        <div class="correctness-head">
+          <h3>Sözleşme Doğru mu?</h3>
+          <span class="pill" id="correctnessBadge">—</span>
         </div>
-        <div class="muted small" id="contractCheckSummary">—</div>
-        <div class="contract-check-grid">
+        <div class="muted" id="correctnessText">—</div>
+        <ul class="correctness-list" id="correctnessList"></ul>
+      </section>
+
+
+      <section class="correctness-box hidden" id="marketBox">
+        <div class="correctness-head">
+          <h3>Piyasa / Mantık Kontrolü</h3>
+          <span class="pill" id="marketBadge">—</span>
+        </div>
+        <div class="muted" id="marketText">—</div>
+        <ul class="correctness-list" id="marketList"></ul>
+        <div class="muted small" id="marketCaveats" style="margin-top:8px"></div>
+      </section>
+
+
+      <section class="correctness-box hidden" id="actionPlanBox">
+        <div class="correctness-head">
+          <h3>İmza Öncesi Plan</h3>
+          <span class="pill" id="actionPlanBadge">—</span>
+        </div>
+        <div class="muted" id="actionPlanText">—</div>
+        <div class="plan-grid">
           <div>
-            <div class="muted small">Öne çıkan kontrol noktaları</div>
-            <ul class="contract-check-list" id="contractCheckList"></ul>
+            <div class="muted small plan-title">Önce düzelt</div>
+            <ul class="correctness-list" id="actionPlanMust"></ul>
           </div>
           <div>
-            <div class="muted small">İmza öncesi yapılacaklar</div>
-            <ul class="contract-check-list" id="contractCheckActions"></ul>
+            <div class="muted small plan-title">Netleştir</div>
+            <ul class="correctness-list" id="actionPlanClarify"></ul>
+          </div>
+          <div>
+            <div class="muted small plan-title">Dengeleyici sinyaller</div>
+            <ul class="correctness-list" id="actionPlanGood"></ul>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section class="correctness-box hidden" id="decisionBox">
+        <div class="correctness-head">
+          <h3>Karar Önerisi</h3>
+          <span class="pill" id="decisionBadge">—</span>
+        </div>
+        <div class="muted" id="decisionText">—</div>
+        <div class="plan-grid">
+          <div>
+            <div class="muted small plan-title">Neden?</div>
+            <ul class="correctness-list" id="decisionReasons"></ul>
+          </div>
+          <div>
+            <div class="muted small plan-title">Sonraki adım</div>
+            <ul class="correctness-list" id="decisionNext"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="correctness-box hidden" id="subscoresBox">
+        <div class="correctness-head">
+          <h3>Alt Skorlar</h3>
+        </div>
+        <div class="subscore-grid" id="subscoresGrid"></div>
+      </section>
+
+      <section class="correctness-box hidden" id="mitigationBox">
+        <div class="correctness-head">
+          <h3>Dengeleyici Maddeler</h3>
+          <span class="pill" id="mitigationBadge">—</span>
+        </div>
+        <div class="muted" id="mitigationText">—</div>
+        <ul class="correctness-list" id="mitigationList"></ul>
+      </section>
+
+      <section class="correctness-box hidden" id="redlineBox">
+        <div class="correctness-head">
+          <h3>Redline / Revize Önerileri</h3>
+        </div>
+        <div class="muted">Aşağıdaki maddeler için karşı tarafa doğrudan revize talebi gönderebilirsin.</div>
+        <div class="redline-grid" id="redlineList"></div>
+      </section>
+
+      <section class="correctness-box hidden" id="whatIfBox">
+        <div class="correctness-head">
+          <h3>What-if / Olası Sonuçlar</h3>
+        </div>
+        <div class="muted">Sözleşme çalışmaya başladığında tipik senaryolarda sana nasıl dönebileceğini özetler.</div>
+        <div class="redline-grid" id="whatIfList"></div>
+      </section>
 
       <div class="score-grid">
         <div class="score-box">
@@ -217,11 +290,11 @@
 
       <div class="negotiation" id="negBox">
         <div class="neg-head">
-          <h3>Pazarlık Çıktısı</h3>
-          <div class="muted small">Risklerden otomatik “revize isteği” metni üretir (kopyala-yapıştır). Analizden sonra kendiliğinden oluşur.</div>
+          <h3>Karşı Tarafa Gönderilebilir Revize Metni</h3>
+          <div class="muted small">Analizde çıkan riskleri, seçtiğin sözleşme türüne uygun daha doğal, profesyonel ve gönderilebilir bir revize metnine dönüştürür.</div>
         </div>
         <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap">
-          <button class="btn" id="btnNegBuild">Yeniden Oluştur</button>
+          <button class="btn" id="btnNegBuild">Yeniden Yaz</button>
           <button class="btn" id="btnNegCopy" disabled>Kopyala</button>
           <button class="btn" id="btnNegClear">Temizle</button>
           <label class="muted small" style="display:flex; align-items:center; gap:8px; margin-left:auto">
@@ -229,16 +302,16 @@
             Sadece ekranda görünen (filtreli) riskleri kullan
           </label>
         </div>
-        <textarea id="negText" class="textarea" rows="9" readonly placeholder="Analiz yaptıktan sonra burada otomatik bir pazarlık metni oluşur."></textarea>
-        <div class="muted small">İpucu: Her risk kartındaki “Pazarlık Metni” alanı aşağı doğru açılır. İçinden kopyalayabilir veya üstteki kutuya aktarabilirsin.</div>
+        <textarea id="negText" class="textarea" rows="9" readonly placeholder="Analiz yaptıktan sonra burada, karşı tarafa doğrudan iletebileceğin temiz bir revize metni oluşur."></textarea>
+        <div class="muted small">İpucu: Her risk kartındaki “Revize Metni” alanı tek madde için kısa bir taslak üretir; üstteki kutu ise tüm riskleri bir araya getirir.</div>
       </div>
 
 
 <div class="simulator hidden" id="simCard">
-  <h3>Maliyet Simülasyonu</h3>
+  <h3 id="simTitle">Maliyet / Piyasa Kontrolü</h3>
   <div class="muted small" id="simSummary">—</div>
 
-  <div class="sim-controls">
+  <div class="sim-controls" id="simControls">
     <div>
       <div class="muted small">İptal: Davete kaç gün kala?</div>
       <input type="range" id="cancelDays" min="0" max="365" value="60" />
@@ -254,7 +327,7 @@
     </div>
   </div>
 
-  <div class="sim-boxes">
+  <div class="sim-boxes" id="simScenarioBoxes">
     <div class="sim-box">
       <div class="sim-title">İptal Senaryosu</div>
       <div id="cancelResult" class="sim-body">—</div>
@@ -263,17 +336,10 @@
       <div class="sim-title">Kişi Sayısı Senaryosu</div>
       <div id="guestResult" class="sim-body">—</div>
     </div>
-  <div class="sim-boxes" id="marketBoxes" style="display:none; margin-top:12px;">
-    <div class="sim-box">
-      <div class="sim-title">Piyasa Kontrolü (yaklaşık)</div>
-      <div id="marketResult" class="sim-body">—</div>
-    </div>
   </div>
 
-  </div>
-
-  <div class="muted small">
-    Not: Bu simülasyon sözleşmeden otomatik çıkarım yapar ve yaklaşık değerler üretir. Kesin rakamlar için sözleşme metnini ve tedarikçi ile yazışmalarını esas alın.
+  <div class="muted small" id="simNote">
+    Not: Bu bölüm sözleşmeden otomatik çıkarım yapar ve yaklaşık değerler üretir. Kesin rakamlar için sözleşme metnini ve yazışmaları esas alın.
   </div>
 </div>
 
@@ -360,7 +426,9 @@
     window.__PAYMENTS_PROVIDER__ = "<%= paymentsProvider %>";
     window.__CSP_NONCE__ = "<%= cspNonce %>";
     window.__CHECKOUT_PACKS__ = <%- JSON.stringify(checkoutPacks || []) %>;
+    window.APP_META = <%- JSON.stringify(appMeta || {}) %>;
   </script>
-  <script src="/public/app.js?v=27"></script>
+  <script src="/public/negotiation-copy.js?v=34"></script>
+  <script src="/public/app.js?v=35"></script>
 </body>
 </html>

@@ -17,8 +17,13 @@ function withCsrf(headers = {}) {
 const fileInput = $("file");
 const roleSelect = $("role");
 const packSelect = $("pack");
+const sensitivitySelect = $("sensitivity");
 const fileInfo = $("fileInfo");
 const billingInfo = $("billingInfo");
+const roleHelpEl = $("roleHelp");
+const packHelpEl = $("packHelp");
+const sensitivityHelpEl = $("sensitivityHelp");
+const packExamplesEl = $("packExamples");
 
 // Üst barda mini kredi göstergesi
 const creditsPill = $("creditsPill");
@@ -57,15 +62,54 @@ const iyzicoCheckout = $("iyzicoCheckout");
 
 const riskScoreEl = $("riskScore");
 const riskLevelEl = $("riskLevel");
-const contractCheckTitleEl = $("contractCheckTitle");
-const contractCheckPillEl = $("contractCheckPill");
-const contractCheckSummaryEl = $("contractCheckSummary");
-const contractCheckListEl = $("contractCheckList");
-const contractCheckActionsEl = $("contractCheckActions");
 const metaLine = $("metaLine");
 const qualityLine = $("qualityLine");
 const issueCountEl = $("issueCount");
 const softCountEl = $("softCount");
+
+// Doğruluk / tutarlılık alanı
+const correctnessBox = $("correctnessBox");
+const correctnessBadge = $("correctnessBadge");
+const correctnessText = $("correctnessText");
+const correctnessList = $("correctnessList");
+
+const reviewBox = $("reviewBox");
+const reviewBadge = $("reviewBadge");
+const reviewText = $("reviewText");
+const reviewList = $("reviewList");
+
+const mitigationBox = $("mitigationBox");
+const mitigationBadge = $("mitigationBadge");
+const mitigationText = $("mitigationText");
+const mitigationList = $("mitigationList");
+
+const marketBox = $("marketBox");
+const marketBadge = $("marketBadge");
+const marketText = $("marketText");
+const marketList = $("marketList");
+const marketCaveats = $("marketCaveats");
+
+const actionPlanBox = $("actionPlanBox");
+const actionPlanBadge = $("actionPlanBadge");
+const actionPlanText = $("actionPlanText");
+const actionPlanMust = $("actionPlanMust");
+const actionPlanClarify = $("actionPlanClarify");
+const actionPlanGood = $("actionPlanGood");
+
+const decisionBox = $("decisionBox");
+const decisionBadge = $("decisionBadge");
+const decisionText = $("decisionText");
+const decisionReasons = $("decisionReasons");
+const decisionNext = $("decisionNext");
+
+const subscoresBox = $("subscoresBox");
+const subscoresGrid = $("subscoresGrid");
+
+const redlineBox = $("redlineBox");
+const redlineList = $("redlineList");
+
+const whatIfBox = $("whatIfBox");
+const whatIfList = $("whatIfList");
 
 // Skor açıklaması alanı
 const scoreMeaningEl = $("scoreMeaning");
@@ -89,7 +133,11 @@ let negAutoEnabled = true;
 
 
 const simCard = $("simCard");
+const simTitle = $("simTitle");
 const simSummary = $("simSummary");
+const simControls = $("simControls");
+const simScenarioBoxes = $("simScenarioBoxes");
+const simNote = $("simNote");
 const cancelDays = $("cancelDays");
 const cancelDaysVal = $("cancelDaysVal");
 const guaranteeGuests = $("guaranteeGuests");
@@ -98,9 +146,6 @@ const actualGuestsRange = $("actualGuestsRange");
 const actualGuestsVal = $("actualGuestsVal");
 const cancelResult = $("cancelResult");
 const guestResult = $("guestResult");
-
-const marketBoxes = $("marketBoxes");
-const marketResult = $("marketResult");
 
 const historyEl = $("history");
 
@@ -128,6 +173,28 @@ let _toastTimer = null;
 
 const LS_LAST_RESTORE = "avukatim_last_restore_token";
 const LS_PENDING_PAYMENT = "avukatim_pending_payment_v1";
+const APP_META = (window.APP_META && typeof window.APP_META === "object") ? window.APP_META : {};
+const ROLE_HELPERS = (APP_META.roleHelpers && typeof APP_META.roleHelpers === "object") ? APP_META.roleHelpers : {};
+const PACK_HELPERS = (APP_META.packHelpers && typeof APP_META.packHelpers === "object") ? APP_META.packHelpers : {};
+const PACK_EXAMPLES = (APP_META.packExamples && typeof APP_META.packExamples === "object") ? APP_META.packExamples : {};
+const PACK_LABELS = (APP_META.packLabels && typeof APP_META.packLabels === "object") ? APP_META.packLabels : {};
+const SENSITIVITY_HELPERS = (APP_META.sensitivityHelpers && typeof APP_META.sensitivityHelpers === "object") ? APP_META.sensitivityHelpers : {};
+const SENSITIVITY_LABELS = (APP_META.sensitivityLabels && typeof APP_META.sensitivityLabels === "object") ? APP_META.sensitivityLabels : {};
+
+function syncOptionHints() {
+  const roleId = String(roleSelect?.value || "genel");
+  const packId = String(packSelect?.value || "genel");
+  const sensitivityId = String(sensitivitySelect?.value || "dengeli");
+
+  if (roleHelpEl) roleHelpEl.textContent = ROLE_HELPERS[roleId] || ROLE_HELPERS.genel || "";
+  if (packHelpEl) packHelpEl.textContent = PACK_HELPERS[packId] || PACK_HELPERS.genel || "";
+  if (sensitivityHelpEl) sensitivityHelpEl.textContent = SENSITIVITY_HELPERS[sensitivityId] || SENSITIVITY_HELPERS.dengeli || "";
+
+  if (packExamplesEl) {
+    const examples = Array.isArray(PACK_EXAMPLES[packId]) ? PACK_EXAMPLES[packId] : (Array.isArray(PACK_EXAMPLES.genel) ? PACK_EXAMPLES.genel : []);
+    packExamplesEl.textContent = examples.length ? `Örnekler: ${examples.join(", ")}` : "";
+  }
+}
 
 function _safeJsonParse(str) {
   try { return JSON.parse(str); } catch { return null; }
@@ -542,6 +609,10 @@ fileInput?.addEventListener("change", () => {
   hideResult();
 });
 
+roleSelect?.addEventListener("change", syncOptionHints);
+packSelect?.addEventListener("change", syncOptionHints);
+sensitivitySelect?.addEventListener("change", syncOptionHints);
+
 btnReset?.addEventListener("click", () => {
   fileInput.value = "";
   fileInfo.textContent = "Dosya seçilmedi.";
@@ -558,7 +629,7 @@ btnDemo?.addEventListener("click", async () => {
     const resp = await fetch("/api/analyze-demo", {
       method: "POST",
       headers: withCsrf({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ role, pack })
+      body: JSON.stringify({ role, pack, sensitivity: sensitivitySelect?.value || "dengeli" })
     });
     const data = await resp.json();
     if (!data.ok) throw new Error(data.error || "Demo analiz başarısız");
@@ -599,6 +670,7 @@ btnAnalyze?.addEventListener("click", async () => {
     fd.append("file", f);
     fd.append("role", role);
     fd.append("pack", pack);
+    fd.append("sensitivity", sensitivitySelect?.value || "dengeli");
 
     const resp = await fetch("/api/analyze-file", { method: "POST", headers: withCsrf({}), body: fd });
     const data = await resp.json();
@@ -774,12 +846,22 @@ function renderSimulation(simulation) {
   if (!simCard) return;
 
   const ev = simulation?.event;
-  if (!ev?.available) {
+  const market = simulation?.market || null;
+  const hasEvent = !!ev?.available;
+
+  if (!hasEvent) {
     simCard.classList.add("hidden");
     return;
   }
 
   simCard.classList.remove("hidden");
+
+  if (simTitle) simTitle.textContent = "Maliyet / Piyasa Kontrolü";
+  if (simControls) simControls.style.display = "grid";
+  if (simScenarioBoxes) simScenarioBoxes.style.display = "grid";
+  if (simNote) {
+    simNote.textContent = "Not: Bu bölüm sözleşmeden otomatik çıkarım yapar ve yaklaşık değerler üretir. Kesin rakamlar için sözleşme metnini ve yazışmaları esas alın.";
+  }
 
   const currency = ev.total?.currency || "EUR";
   const total = ev.total?.amount;
@@ -815,7 +897,6 @@ function renderSimulation(simulation) {
     __simBound = true;
   }
 
-  // defaults
   if (guaranteeGuests && ev.guarantee && !guaranteeGuests.value) guaranteeGuests.value = String(ev.guarantee);
   if (actualGuests) {
     const defA = ev.actual ?? ev.guarantee ?? 0;
@@ -829,37 +910,6 @@ function renderSimulation(simulation) {
 
   updateSim(ev);
 
-  // Market review
-  if (marketBoxes && marketResult) {
-    const market = sim.market;
-    if (!market || !market.available) {
-      marketBoxes.style.display = "none";
-      marketResult.textContent = "";
-    } else {
-      marketBoxes.style.display = "grid";
-      const parts = [];
-      if (market.summary) parts.push(`<div class="muted" style="margin-bottom:8px">${escapeHtml(market.summary)}</div>`);
-
-      if (Array.isArray(market.checks) && market.checks.length) {
-        const items = market.checks
-          .map((c) => {
-            const label = escapeHtml(c.label || "");
-            const value = escapeHtml(c.value || "");
-            const verdict = c.verdict ? ` <span class="badge">${escapeHtml(c.verdict)}</span>` : "";
-            const detail = c.detail ? `<div class="muted" style="margin-top:4px">${escapeHtml(c.detail)}</div>` : "";
-            return `<li style="margin:6px 0"><b>${label}:</b> ${value}${verdict}${detail}</li>`;
-          })
-          .join("");
-        parts.push(`<ul style="margin:0; padding-left:18px">${items}</ul>`);
-      }
-
-      if (Array.isArray(market.caveats) && market.caveats.length) {
-        const cave = market.caveats.map((x) => `• ${escapeHtml(String(x))}`).join("<br>");
-        parts.push(`<div class="muted" style="margin-top:10px"><b>Not:</b><br>${cave}</div>`);
-      }
-      marketResult.innerHTML = parts.join("");
-    }
-  }
 }
 
 function guestRangeMax(guarantee, actual) {
@@ -970,20 +1020,212 @@ function roleLabel(role) {
 }
 
 function packLabel(pack) {
-  switch (pack) {
+  const key = String(pack || "genel");
+  if (PACK_LABELS[key]) return PACK_LABELS[key];
+  switch (key) {
     case "genel": return "Genel";
-    case "satis": return "Satış/Alım";
+    case "satis": return "Satış / Alım";
     case "kira": return "Kira";
-    case "hizmet": return "Hizmet";
-    case "is": return "İş";
-    case "gizlilik": return "NDA / Gizlilik";
-    case "saas": return "SaaS Abonelik";
-    case "etkinlik": return "Düğün/Etkinlik";
-    case "influencer": return "Influencer";
-    default: return pack || "Genel";
+    case "hizmet": return "Hizmet / Serbest Çalışma";
+    case "is": return "İş Sözleşmesi";
+    case "gizlilik": return "Gizlilik / NDA";
+    case "saas": return "SaaS / Yazılım Aboneliği";
+    case "etkinlik": return "Düğün / Etkinlik";
+    case "influencer": return "Influencer Anlaşması";
+    case "kredi": return "Kredi / Borç";
+    case "egitim": return "Eğitim / Kurs";
+    case "abonelik": return "Abonelik / Taahhüt";
+    case "arac": return "Araç Kiralama";
+    case "seyahat": return "Seyahat / Tur / Otel";
+    case "sigorta": return "Sigorta / Poliçe";
+    default: return key || "Genel";
   }
 }
 
+function renderCorrectness(summary) {
+  const c = summary?.correctness || null;
+  if (!correctnessBox || !correctnessBadge || !correctnessText || !correctnessList) return;
+
+  if (!c) {
+    correctnessBox.classList.add("hidden");
+    correctnessText.textContent = "";
+    correctnessList.innerHTML = "";
+    return;
+  }
+
+  correctnessBox.classList.remove("hidden");
+  correctnessBadge.textContent = c.status || "KONTROL ET";
+  correctnessBadge.className = pillColorClass(c.color || "medium");
+  correctnessText.textContent = c.message || "";
+
+  const items = Array.isArray(c.items) ? c.items : [];
+  if (!items.length) {
+    correctnessList.innerHTML = "";
+  } else {
+    correctnessList.innerHTML = items.slice(0, 5).map((it) => {
+      const why = it?.why ? `<span class="muted small">${escapeHtml(String(it.why))}</span>` : "";
+      return `<li><strong>${escapeHtml(String(it.title || ""))}</strong>${why ? `<br>${why}` : ""}</li>`;
+    }).join("");
+  }
+}
+
+function renderMitigations(summary, analysis) {
+  const m = summary?.mitigationSummary || analysis?.mitigation || null;
+  if (!mitigationBox || !mitigationBadge || !mitigationText || !mitigationList) return;
+  const items = Array.isArray(m?.items) ? m.items : [];
+  const reasons = Array.isArray(m?.reasons) ? m.reasons : [];
+  const points = Number(m?.points || analysis?.mitigation?.points || 0);
+  if (!points && !items.length && !reasons.length) {
+    mitigationBox.classList.add("hidden");
+    mitigationText.textContent = "";
+    mitigationList.innerHTML = "";
+    return;
+  }
+  mitigationBox.classList.remove("hidden");
+  mitigationBadge.textContent = m.status || "DENGE VAR";
+  mitigationBadge.className = pillColorClass(m.color || "low");
+  const baseText = m.message || "Metinde bazı dengeleyici hükümler görüldü.";
+  mitigationText.textContent = points > 0 ? `${baseText} (Skoru yumuşatan yaklaşık etki: -${points.toFixed(1)} puan)` : baseText;
+  const lines = items.length
+    ? items.map((it) => `<li>${escapeHtml(String(it.title || ""))}</li>`)
+    : reasons.slice(0, 5).map((x) => `<li>${escapeHtml(String(x || ""))}</li>`);
+  mitigationList.innerHTML = lines.join("");
+}
+
+function renderMarketReview(review) {
+  if (!marketBox || !marketBadge || !marketText || !marketList || !marketCaveats) return;
+  if (!review || !review.available) {
+    marketBox.classList.add("hidden");
+    marketText.textContent = "";
+    marketList.innerHTML = "";
+    marketCaveats.innerHTML = "";
+    return;
+  }
+  marketBox.classList.remove("hidden");
+  marketBadge.textContent = review.status || "KONTROL ET";
+  marketBadge.className = pillColorClass(review.color || "medium");
+  marketText.textContent = review.summary || "";
+  const checks = Array.isArray(review.checks) ? review.checks : [];
+  marketList.innerHTML = checks.slice(0, 8).map((c) => {
+    const verdict = c?.verdict ? ` <span class="muted small">(${escapeHtml(String(c.verdict))})</span>` : "";
+    const detail = c?.detail ? `<div class="muted small">${escapeHtml(String(c.detail))}</div>` : "";
+    return `<li><strong>${escapeHtml(String(c.label || ""))}:</strong> ${escapeHtml(String(c.value || ""))}${verdict}${detail}</li>`;
+  }).join("");
+  const cave = Array.isArray(review.caveats) ? review.caveats : [];
+  marketCaveats.innerHTML = cave.length ? `<b>Not:</b><br>${cave.map((x) => `• ${escapeHtml(String(x || ""))}`).join("<br>")}` : "";
+}
+
+function renderActionPlan(summary) {
+  const plan = summary?.actionPlan || null;
+  if (!actionPlanBox || !actionPlanBadge || !actionPlanText || !actionPlanMust || !actionPlanClarify || !actionPlanGood) return;
+  if (!plan) {
+    actionPlanBox.classList.add("hidden");
+    actionPlanText.textContent = "";
+    actionPlanMust.innerHTML = "";
+    actionPlanClarify.innerHTML = "";
+    actionPlanGood.innerHTML = "";
+    return;
+  }
+  actionPlanBox.classList.remove("hidden");
+  actionPlanBadge.textContent = plan.status || "KONTROL ET";
+  actionPlanBadge.className = pillColorClass(plan.color || "medium");
+  actionPlanText.textContent = plan.summary || "";
+  const renderList = (arr, empty) => (Array.isArray(arr) && arr.length)
+    ? arr.map((x) => `<li>${escapeHtml(String(x || ""))}</li>`).join("")
+    : `<li class="muted small">${escapeHtml(empty)}</li>`;
+  actionPlanMust.innerHTML = renderList(plan.mustFix, "Şu an acil düzeltme listesi görünmüyor.");
+  actionPlanClarify.innerHTML = renderList(plan.shouldClarify, "Netleştirilmesi gereken ek başlık görünmüyor.");
+  actionPlanGood.innerHTML = renderList(plan.goodSignals, "Belirgin dengeleyici sinyal görünmüyor.");
+}
+
+function renderDecision(summary) {
+  const d = summary?.decision || null;
+  if (!decisionBox || !decisionBadge || !decisionText || !decisionReasons || !decisionNext) return;
+  if (!d) {
+    decisionBox.classList.add('hidden');
+    decisionText.textContent = '';
+    decisionReasons.innerHTML = '';
+    decisionNext.innerHTML = '';
+    return;
+  }
+  decisionBox.classList.remove('hidden');
+  decisionBadge.textContent = d.status || 'KONTROL ET';
+  decisionBadge.className = pillColorClass(d.color || 'medium');
+  decisionText.textContent = d.summary || '';
+  const renderList = (arr, empty) => (Array.isArray(arr) && arr.length)
+    ? arr.map((x) => `<li>${escapeHtml(String(x || ''))}</li>`).join('')
+    : `<li class="muted small">${escapeHtml(empty)}</li>`;
+  decisionReasons.innerHTML = renderList(d.reasons, 'Belirgin gerekçe görünmüyor.');
+  decisionNext.innerHTML = renderList(d.nextSteps, 'Ek adım görünmüyor.');
+}
+
+function renderSubscores(summary) {
+  const items = Array.isArray(summary?.subScores) ? summary.subScores : [];
+  if (!subscoresBox || !subscoresGrid) return;
+  if (!items.length) {
+    subscoresBox.classList.add('hidden');
+    subscoresGrid.innerHTML = '';
+    return;
+  }
+  subscoresBox.classList.remove('hidden');
+  subscoresGrid.innerHTML = items.map((it) => {
+    const score = Number(it.score || 0);
+    const band = score >= 65 ? 'high' : score >= 35 ? 'medium' : 'low';
+    return `
+      <div class="subscore-card">
+        <div class="subscore-head">
+          <div class="subscore-title">${escapeHtml(String(it.label || ''))}</div>
+          <div class="badge badge-${band === 'high' ? 'HIGH' : band === 'medium' ? 'MEDIUM' : 'LOW'}">${score}/100</div>
+        </div>
+        <div class="subscore-meter"><span class="subscore-fill subscore-${band}" style="width:${Math.max(4, Math.min(100, score))}%"></span></div>
+        <div class="muted small">${escapeHtml(String(it.summary || ''))}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRedlinePlaybook(analysis) {
+  const items = Array.isArray(analysis?.redlinePlaybook) ? analysis.redlinePlaybook : [];
+  if (!redlineBox || !redlineList) return;
+  if (!items.length) {
+    redlineBox.classList.add('hidden');
+    redlineList.innerHTML = '';
+    return;
+  }
+  redlineBox.classList.remove('hidden');
+  redlineList.innerHTML = items.map((it) => `
+    <div class="redline-card">
+      <div class="item-head">
+        <div class="item-title">${escapeHtml(String(it.clause || 'İlgili madde'))}</div>
+        <div class="badge badge-${escapeHtml(String(it.severity || 'LOW'))}">${sevTr(String(it.severity || 'LOW'))}</div>
+      </div>
+      <div class="muted small"><strong>${escapeHtml(String(it.title || ''))}</strong></div>
+      ${it.reason ? `<div class="muted" style="margin-top:6px">${escapeHtml(String(it.reason || ''))}</div>` : ''}
+      ${it.moneyImpact ? `<div class="muted small" style="margin-top:6px"><b>Parasal etki:</b> ${escapeHtml(String(it.moneyImpact || ''))}</div>` : ''}
+      <div class="section" style="margin-top:10px"><div class="section-title">Karşı tarafa ne iste</div><div>${escapeHtml(String(it.ask || ''))}</div></div>
+      <div class="section" style="margin-top:8px"><div class="section-title">İdeal madde mantığı</div><div>${escapeHtml(String(it.idealClause || ''))}</div></div>
+    </div>
+  `).join('');
+}
+
+function renderWhatIf(analysis) {
+  const items = Array.isArray(analysis?.whatIf?.items) ? analysis.whatIf.items : [];
+  if (!whatIfBox || !whatIfList) return;
+  if (!items.length) {
+    whatIfBox.classList.add('hidden');
+    whatIfList.innerHTML = '';
+    return;
+  }
+  whatIfBox.classList.remove('hidden');
+  whatIfList.innerHTML = items.map((it) => `
+    <div class="redline-card">
+      <div class="item-title">${escapeHtml(String(it.title || ''))}</div>
+      <div style="margin-top:8px">${escapeHtml(String(it.outcome || ''))}</div>
+      ${it.impact ? `<div class="meta-pill" style="margin-top:8px">${escapeHtml(String(it.impact || ''))}</div>` : ''}
+      ${it.why ? `<div class="muted small" style="margin-top:8px">${escapeHtml(String(it.why || ''))}</div>` : ''}
+    </div>
+  `).join('');
+}
 
 function renderScoreExplain(summary) {
   const ex = summary?.scoreExplain || null;
@@ -1036,86 +1278,17 @@ function renderScoreExplain(summary) {
   }
 }
 
-function contractPillClass(color) {
-  switch (String(color || "").toLowerCase()) {
-    case "critical": return "pill pill-critical";
-    case "high": return "pill pill-high";
-    case "medium": return "pill pill-medium";
-    case "low":
-    default: return "pill pill-low";
-  }
-}
-
-function isCorrectnessSoftWarning(it) {
-  if (!it) return false;
-  if (it.category === "Tutarlılık") return true;
-  const ids = new Set([
-    "pack_mismatch",
-    "pack_suggestion",
-    "event_topic_mismatch",
-    "placeholders",
-    "role_mismatch",
-    "no_parties",
-    "no_signature",
-    "no_money",
-    "no_date",
-    "topic_suggest_arac",
-    "topic_maybe_not_arac",
-    "topic_maybe_not_employment",
-    "topic_maybe_not_nda",
-    "topic_suggest_saas",
-    "topic_suggest_abonelik",
-    "topic_maybe_not_travel",
-    "topic_maybe_not_insurance",
-    "topic_maybe_not_education",
-  ]);
-  return !!(it.id && ids.has(String(it.id)));
-}
-
-function renderContractCheck(summary, softWarnings) {
-  const cc = summary?.contractCheck || null;
-  const issues = Array.isArray(cc?.items) ? cc.items : [];
-  const actions = Array.isArray(cc?.actions) ? cc.actions : [];
-
-  if (contractCheckTitleEl) contractCheckTitleEl.textContent = cc?.label || "İmza öncesi kontrol et";
-  if (contractCheckPillEl) {
-    contractCheckPillEl.textContent = cc?.blockingCount > 0 ? `${cc.blockingCount} kritik kontrol` : `${issues.length || 0} kontrol notu`;
-    contractCheckPillEl.className = contractPillClass(cc?.color || "medium");
-  }
-  if (contractCheckSummaryEl) contractCheckSummaryEl.textContent = cc?.summary || "Sözleşmenin konusu, türü ve temel bilgileri genel olarak makul görünüyor.";
-
-  if (contractCheckListEl) {
-    if (!issues.length) {
-      contractCheckListEl.innerHTML = `<li>Bariz bir konu/tür/boş alan tutarsızlığı yakalanmadı.</li>`;
-    } else {
-      contractCheckListEl.innerHTML = issues.slice(0, 4).map((it) => {
-        const why = escapeHtml(String(it.why || ""));
-        const title = escapeHtml(String(it.title || "Kontrol et"));
-        return `<li><b>${title}:</b> ${why}</li>`;
-      }).join("");
-    }
-  }
-
-  if (contractCheckActionsEl) {
-    if (!actions.length) {
-      contractCheckActionsEl.innerHTML = `<li>İmza öncesi konu, taraf, tarih ve bedel alanlarını bir kez daha doğrula.</li>`;
-    } else {
-      contractCheckActionsEl.innerHTML = actions.slice(0, 3).map((a) => `<li>${escapeHtml(String(a))}</li>`).join("");
-    }
-  }
-}
-
 function renderAll(analysis, extracted) {
   const s = analysis.summary;
   const m = analysis.meta;
-  const visibleSoftWarnings = (analysis.softWarnings || []).filter((w) => !isCorrectnessSoftWarning(w));
 
   if (riskScoreEl) riskScoreEl.textContent = `${s.riskScore}/100`;
   if (riskLevelEl) riskLevelEl.textContent = `Seviye: ${s.riskLevel}`;
   riskLevelEl.className = pillColorClass(s.riskLevelColor);
 
   if (metaLine) {
-    metaLine.textContent = `Analiz: ${new Date(m.analyzedAt).toLocaleString()} • Rol: ${roleLabel(s.role)}`;
+    const sensitivityLabel = SENSITIVITY_LABELS[String(s.sensitivity || "dengeli")] || String(s.sensitivity || "dengeli");
+    metaLine.textContent = `Analiz: ${new Date(m.analyzedAt).toLocaleString()} • Rol: ${roleLabel(s.role)} • Tür: ${packLabel(s.pack)} • Hassasiyet: ${sensitivityLabel}`;
   }
 
 
@@ -1130,16 +1303,23 @@ function renderAll(analysis, extracted) {
   }
 
   if (issueCountEl) issueCountEl.textContent = `${s.issueCount}`;
-  if (softCountEl) softCountEl.textContent = `${visibleSoftWarnings.length}`;
+  if (softCountEl) softCountEl.textContent = `${s.softWarningCount}`;
 
+  renderCorrectness(s);
+  renderDecision(s);
+  renderSubscores(s);
+  renderMitigations(s, analysis);
+  renderActionPlan(s);
+  renderMarketReview(analysis.marketReview || analysis.simulation?.market || null);
   renderScoreExplain(s);
-  renderContractCheck(s, analysis.softWarnings || []);
+  renderRedlinePlaybook(analysis);
+  renderWhatIf(analysis);
 
   renderTop3(analysis.topRisks || []);
   renderFilters(s);
   applyFilters();
-  renderSoft(visibleSoftWarnings);
-  renderSimulation(analysis.simulation || null);
+  renderSoft(analysis.softWarnings || []);
+  renderSimulation({ ...(analysis.simulation || {}), market: analysis.marketReview || analysis.simulation?.market || null });
 
   // Pazarlık kutusunu yeni analiz için sıfırla
   if (negText) negText.value = "";
@@ -1320,7 +1500,7 @@ function renderIssueCard(it) {
   const togglesHtml = `
     <div class="issue-actions">
       <button class="issue-toggle" type="button" data-issue-toggle="quote" data-issue="${idEsc}">Metinden alıntı</button>
-      <button class="issue-toggle" type="button" data-issue-toggle="neg" data-issue="${idEsc}">Pazarlık metni</button>
+      <button class="issue-toggle" type="button" data-issue-toggle="neg" data-issue="${idEsc}">Revize metni</button>
     </div>
   `;
 
@@ -1419,33 +1599,12 @@ async function loadBillingStatus() {
 
 
 
-// ---------- Pazarlık Çıktısı ----------
-
-function _cleanTemplate(t) {
-  return String(t || "")
-    .trim()
-    .replace(/[\s\n\r]+/g, " ")
-    .replace(/[\.!؟?]+$/g, "");
-}
-
-function _rolePrefix(roleId) {
-  const r = String(roleId || "genel");
-  switch (r) {
-    case "hizmet_alan": return "hizmet alan taraf olarak";
-    case "hizmet_veren": return "hizmet veren taraf olarak";
-    case "kiraci": return "kiracı olarak";
-    case "ev_sahibi": return "ev sahibi olarak";
-    case "alici": return "alıcı olarak";
-    case "satici": return "satıcı olarak";
-    default: return "taraf olarak";
-  }
-}
+// ---------- Revize Talep Metni ----------
 
 async function copyTextToClipboard(text) {
   const t = String(text || "").trim();
   if (!t) return false;
 
-  // Modern API (localhost üzerinde genelde çalışır)
   try {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(t);
@@ -1453,7 +1612,6 @@ async function copyTextToClipboard(text) {
     }
   } catch {}
 
-  // Fallback
   try {
     const ta = document.createElement("textarea");
     ta.value = t;
@@ -1472,111 +1630,47 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function _isMoneyUnknown(moneyImpact) {
-  const s = String(moneyImpact || "").toLowerCase();
-  if (!s.trim()) return true;
-  // "Değişken / net hesaplanamadı" gibi ifadeler kullanıcıya fayda sağlamıyor.
-  return s.includes("değişken") || s.includes("hesaplanamad") || s.includes("net hesap");
-}
-
-function _indentBlock(text, indent) {
-  const pad = indent || "  ";
-  const lines = String(text || "").split("\n");
-  return lines.map((ln, idx) => (idx === 0 ? ln : pad + ln)).join("\n");
+function _buildIssueNegotiation(it, opts = {}) {
+  if (window.NegotiationCopy && typeof window.NegotiationCopy.buildIssueText === "function") {
+    return window.NegotiationCopy.buildIssueText(it, {
+      role: lastAnalysis?.summary?.role || "genel",
+      pack: lastAnalysis?.summary?.pack || "genel",
+      includeGreeting: !!opts.includeGreeting,
+      includeClosing: !!opts.includeClosing,
+      sensitivity: lastAnalysis?.summary?.sensitivity || "dengeli",
+      counterpartyContext: lastAnalysis?.summary?.counterpartyContext || lastAnalysis?.counterpartyContext || null,
+    });
+  }
+  return String(it?.why || "").trim();
 }
 
 function buildNegotiationForIssue(it, opts = {}) {
-  const includeGreeting = !!opts.includeGreeting;
-  const includeClosing = !!opts.includeClosing;
-
-  const title = String(it?.title || "—").trim();
-
-  // Pazarlık metninde başlık yerine mümkünse sadece madde numarası göster.
-  // Örn: “Sınırsız sorumluluk / dolaylı zarar” yerine “Madde 10”.
-  const clauseRaw = it?.clause ? String(it.clause).trim() : "";
-  const clauseLabel = clauseRaw
-    ? clauseRaw.replace(/^[\s(]+|[\s)]+$/g, "").trim()
-    : "";
-  const refLabel = clauseLabel || `“${title}”`;
-  const why = String(it?.why || "Bu madde benim için gereksiz risk oluşturuyor.").trim();
-
-  const rawMoney = String(it?.moneyImpact || "").trim();
-  const money = (!rawMoney || _isMoneyUnknown(rawMoney)) ? "" : rawMoney;
-
-  const templates = Array.isArray(it?.templates)
-    ? it.templates.map(_cleanTemplate).filter(Boolean)
-    : [];
-
-  const asks = (templates.length ? templates.slice(0, 3) : [
-    "Bu maddeyi daha net ve dengeli olacak şekilde revize edelim"
-  ])
-    .map((t) => {
-      const s = String(t || "")
-        .trim()
-        // Şablonlarda bazen liste işaretleri kalıyor; düz metne çeviriyoruz.
-        .replace(/^\s*[-*•]\s+/, "");
-      if (!s) return "";
-      return /[.!?…]$/.test(s) ? s : `${s}.`;
-    })
-    .filter(Boolean);
-
-  let out = "";
-  if (includeGreeting) out += "Merhaba,\n\n";
-
-  // Gönderime hazır, daha doğal bir metin
-  out += `Sözleşmedeki ${refLabel} maddesi için küçük bir revize rica edeceğim.\n\n`;
-  out += `${why}\n`;
-  if (money) out += `Bu maddenin tahmini parasal etkisi ${money}.\n`;
-  out += `\nUygunsa şu revizeyi rica ediyorum. ${asks.join(" ")}`;
-
-  if (includeClosing) {
-    out += "\n\nUygunsa buna göre güncelleyebilir miyiz?\nTeşekkürler.";
-  }
-  return out.trim();
-}
-
-function getFilteredIssues() {
-  const issues = (lastAnalysis?.issues || []);
-  return issues.filter(it => {
-    const okSev = (state.severity === "ALL") || (it.severity === state.severity);
-    const okCat = (state.category === "ALL") || (it.category === state.category);
-    return okSev && okCat;
-  });
+  return _buildIssueNegotiation(it, opts);
 }
 
 function buildNegotiationDoc(issues) {
   const arr = Array.isArray(issues) ? issues : [];
-  const role = lastAnalysis?.summary?.role || "genel";
-  const roleTxt = _rolePrefix(role);
-
-  const intro =
-`Merhaba,
-
-Sözleşmeyi ${roleTxt} imza öncesi hızlıca gözden geçirdim. Aşağıdaki maddelerde küçük bir revize/neteştirme rica edeceğim:
-
-`;
-
-  const body = arr.map((it, i) => {
-    const block = buildNegotiationForIssue(it);
-    const lines = block.split("\n");
-    lines[0] = `${i + 1}) ${lines[0]}`;
-    return _indentBlock(lines.join("\n"), "   ");
-  }).join("\n\n");
-
-  return (intro + (body || "—") + "\n\nUygunsa buna göre güncelleyebilir miyiz?\nTeşekkürler.").trim();
+  if (window.NegotiationCopy && typeof window.NegotiationCopy.buildDoc === "function") {
+    return window.NegotiationCopy.buildDoc(arr, {
+      role: lastAnalysis?.summary?.role || "genel",
+      pack: lastAnalysis?.summary?.pack || "genel",
+      sensitivity: lastAnalysis?.summary?.sensitivity || "dengeli",
+      counterpartyContext: lastAnalysis?.summary?.counterpartyContext || lastAnalysis?.counterpartyContext || null,
+    });
+  }
+  return arr
+    .map((it) => _buildIssueNegotiation(it, { includeGreeting: false, includeClosing: false }))
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-function buildNegotiationBox({ force = false } = {}) {
-  if (!lastAnalysis || !negText) return;
-  if (!force && !negAutoEnabled) return;
-
-  const issues = (negOnlyFiltered && negOnlyFiltered.checked)
-    ? getFilteredIssues()
-    : (lastAnalysis.issues || []);
-
-  const doc = buildNegotiationDoc(issues);
-  negText.value = doc;
-  if (btnNegCopy) btnNegCopy.disabled = !String(doc || "").trim();
+function getFilteredIssues() {
+  const issues = lastAnalysis?.issues || [];
+  return issues.filter((it) => {
+    const okSev = state.severity === "ALL" || it.severity === state.severity;
+    const okCat = state.category === "ALL" || it.category === state.category;
+    return okSev && okCat;
+  });
 }
 
 function bindIssueCardActions() {
@@ -1843,3 +1937,7 @@ bindHistoryLayout();
 
 renderHistory();
 loadBillingStatus();
+
+
+// İlk yüklemede seçim ipuçlarını doldur
+syncOptionHints();

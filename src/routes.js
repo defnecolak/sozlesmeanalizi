@@ -6,6 +6,7 @@ const fs = require("fs/promises");
 const pkg = require("../package.json");
 
 const { readStore, writeStore } = require("./services/store");
+const { ROLE_OPTIONS, PACK_OPTIONS, SENSITIVITY_OPTIONS, ROLE_HELPERS, PACK_HELPERS, PACK_EXAMPLES, PACK_LABELS, SENSITIVITY_HELPERS, SENSITIVITY_LABELS, normalizeRoleId, normalizePackId, normalizeSensitivityId } = require("./services/contractMeta");
 
 const { analyzeContract } = require("./services/analyzer");
 const { buildPdfReport } = require("./services/pdf");
@@ -260,49 +261,18 @@ const uploadSingleFile = (req, res, next) => {
   });
 };
 
-const ROLES = [
-  { id: "genel", label: "Genel" },
-  { id: "hizmet_alan", label: "Hizmet Alan" },
-  { id: "hizmet_veren", label: "Hizmet Veren" },
-  { id: "kiraci", label: "Kiracı" },
-  { id: "ev_sahibi", label: "Ev Sahibi" },
-  { id: "alici", label: "Alıcı" },
-  { id: "satici", label: "Satıcı" }
-];
-
-const ROLE_IDS = new Set(ROLES.map(r => r.id));
-
-// Pack id'leri UI ile senkron: burada allowlist kullanıyoruz (injection / hatalı input'a karşı).
-const PACK_IDS = new Set([
-  // UI ile senkron olmalı (src/views/app.ejs)
-  "genel",
-  "satis",
-  "kira",
-  "hizmet",
-  "is",
-  "nda",
-  "freelance",
-  "saas",
-  "etkinlik",
-  "influencer",
-
-  // Geriye dönük/alternatif isimler (opsiyonel uyumluluk)
-  "dugun",
-  "alis",
-]);
+const ROLES = ROLE_OPTIONS;
 
 function sanitizeRole(v) {
-  const s = String(v || "genel").trim().toLowerCase();
-  return ROLE_IDS.has(s) ? s : "genel";
+  return normalizeRoleId(v);
 }
 
 function sanitizePack(v) {
-  const s = String(v || "").trim().toLowerCase();
-  if (!s) return "genel";
-  // Aliaslar (geriye dönük uyum)
-  if (s === "dugun") return "etkinlik";
-  if (s === "alis") return "satis";
-  return PACK_IDS.has(s) ? s : "genel";
+  return normalizePackId(v);
+}
+
+function sanitizeSensitivity(v) {
+  return normalizeSensitivityId(v);
 }
 
 function appBaseUrl(req) {
@@ -362,6 +332,16 @@ router.get("/uygulama", async (req, res) => {
     supportEmail: process.env.SUPPORT_EMAIL || "",
     maxFileMb: MAX_FILE_MB,
     roles: ROLES,
+    packOptions: PACK_OPTIONS,
+    sensitivityOptions: SENSITIVITY_OPTIONS,
+    appMeta: {
+      roleHelpers: ROLE_HELPERS,
+      packHelpers: PACK_HELPERS,
+      packExamples: PACK_EXAMPLES,
+      packLabels: PACK_LABELS,
+      sensitivityHelpers: SENSITIVITY_HELPERS,
+      sensitivityLabels: SENSITIVITY_LABELS,
+    },
     paywallMode: String(process.env.PAYWALL_MODE || "off").toLowerCase(),
     billingMode: billingMode(),
     freeTrial: freeTrialLimit(),
@@ -742,10 +722,11 @@ router.get("/ornek-rapor", (req, res) => {
 });
 
 router.post("/api/analyze-demo", express.json({ limit: "120kb" }), (req, res) => {
-  const role = (req.body?.role || "genel").toString();
-  const pack = (req.body?.pack || "genel").toString();
+  const role = sanitizeRole(req.body?.role);
+  const pack = sanitizePack(req.body?.pack);
+  const sensitivity = sanitizeSensitivity(req.body?.sensitivity);
   const demo = getDemoText();
-  const analysis = analyzeContract(demo, { role, pack });
+  const analysis = analyzeContract(demo, { role, pack, sensitivity });
 
   return res.json({ ok: true, extracted: { fileName: "demo.txt" }, analysis, text: demo });
 });
@@ -757,6 +738,7 @@ router.post("/api/analyze-file", analyzeFileLimiter, analyzeFileSlowdown, upload
 
     const role = sanitizeRole(req.body?.role);
     const pack = sanitizePack(req.body?.pack);
+    const sensitivity = sanitizeSensitivity(req.body?.sensitivity);
 
     const deviceId = getOrCreateDeviceId(req, res);
     const gate = await canAnalyze(deviceId);
@@ -794,7 +776,7 @@ router.post("/api/analyze-file", analyzeFileLimiter, analyzeFileSlowdown, upload
       return res.status(400).json({ ok: false, error: "Metin çıkarılamadı veya çok kısa. (Taranmış PDF olabilir.)" });
     }
 
-    const analysis = analyzeContract(text, { role, pack, quality: extracted.quality });
+    const analysis = analyzeContract(text, { role, pack, sensitivity, quality: extracted.quality });
 
     // Client'a dönerken aşırı büyük payload'ları sınırlayalım
     const safeText = text;
