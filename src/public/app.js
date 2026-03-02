@@ -1664,6 +1664,28 @@ function buildNegotiationDoc(issues) {
     .join("\n\n");
 }
 
+
+function buildNegotiationBox(opts = {}) {
+  if (!negText) return;
+
+  const force = !!opts.force;
+  if (!force && !negAutoEnabled) return;
+
+  if (!lastAnalysis) {
+    negText.value = "";
+    if (btnNegCopy) btnNegCopy.disabled = true;
+    return;
+  }
+
+  const issues = (negOnlyFiltered && negOnlyFiltered.checked)
+    ? getFilteredIssues()
+    : (lastAnalysis?.issues || []);
+
+  const txt = String(buildNegotiationDoc(issues) || "").trim();
+  negText.value = txt;
+  if (btnNegCopy) btnNegCopy.disabled = !txt;
+}
+
 function getFilteredIssues() {
   const issues = lastAnalysis?.issues || [];
   return issues.filter((it) => {
