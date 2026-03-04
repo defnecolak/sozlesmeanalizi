@@ -46,8 +46,21 @@ function ensureCsrfCookie(req, res, next) {
   return next();
 }
 
+function requestPathForMatch(req) {
+  // Mounted middleware'lerde req.path mount prefix'i içermeyebilir.
+  // Örn: app.use("/api", requireCsrf) altında /api/iyzico/callback isteği,
+  // burada "/iyzico/callback" olarak görünebilir. Callback/webhook muafiyetini
+  // yanlışlıkla kırmamak için önce originalUrl'e bakıyoruz.
+  const original = String(req.originalUrl || "").split("?")[0].trim();
+  if (original) return original;
+
+  const base = String(req.baseUrl || "");
+  const path = String(req.path || req.url || "").split("?")[0].trim();
+  return `${base}${path}` || path;
+}
+
 function isExemptPath(req) {
-  const p = String(req.path || "");
+  const p = requestPathForMatch(req);
   // Ödeme sağlayıcı callback'leri / webhook'lar (cross-site gelebilir)
   if (p.startsWith("/api/iyzico/callback")) return true;
   if (p.startsWith("/api/webhook/")) return true;

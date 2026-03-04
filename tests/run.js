@@ -1,5 +1,6 @@
 const NegotiationCopy = require("../src/public/negotiation-copy");
 const { analyzeContract } = require("../src/services/analyzer");
+const { requireCsrf } = require("../src/services/csrf");
 
 function assert(cond, msg) {
   if (!cond) {
@@ -209,3 +210,48 @@ Aylık %2,5 gecikme faizi uygulanır.
 assert(creditRes.whatIf && creditRes.whatIf.available, 'Kredi için what-if üretilmeli');
 assert((creditRes.whatIf.items || []).some(x => /taksit/i.test(String(x.title || '')) || /muaccel/i.test(String(x.outcome || ''))), 'Kredi what-if muacceliyet/taksit senaryosu içermeli');
 console.log('✅ Test9 passed');
+
+
+// ---- Test 10: CSRF muaf callback/webhook yolları mounted /api altında da çalışmalı ----
+(function testCsrfExemptPaths() {
+  let nextCalled = 0;
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.body = payload; return this; }
+  };
+
+  requireCsrf({
+    method: "POST",
+    path: "/iyzico/callback",
+    baseUrl: "/api",
+    originalUrl: "/api/iyzico/callback?cid=test",
+    url: "/iyzico/callback?cid=test",
+    headers: {},
+    get() { return undefined; }
+  }, res, () => { nextCalled += 1; });
+
+  requireCsrf({
+    method: "POST",
+    path: "/webhook/lemonsqueezy",
+    baseUrl: "/api",
+    originalUrl: "/api/webhook/lemonsqueezy",
+    url: "/webhook/lemonsqueezy",
+    headers: {},
+    get() { return undefined; }
+  }, res, () => { nextCalled += 1; });
+
+  assert(nextCalled === 2, "Mounted /api callback/webhook yolları CSRF'den muaf olmalı");
+  console.log("✅ Test10 passed");
+})();
+
+// ---- Test 11: ödeme sayfası kendi CSRF helper'ını içermeli ----
+(function testPaymentsHasCsrfHelper() {
+  const fs = require("fs");
+  const path = require("path");
+  const paymentJs = fs.readFileSync(path.join(__dirname, "../src/public/payments.js"), "utf8");
+  assert(/function\s+withCsrf\s*\(/.test(paymentJs), "payments.js içinde withCsrf helper bulunmalı");
+  assert(/csrf_token/.test(paymentJs), "payments.js csrf_token cookie'sini okumalı");
+  console.log("✅ Test11 passed");
+})();

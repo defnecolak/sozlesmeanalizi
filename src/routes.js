@@ -128,14 +128,26 @@ const analyzeFileSlowdown = makeSlowdown({
 
 // CPU yoğun işlerde concurrency limiti (basit semafor + kuyruk)
 function createSemaphore(max, opts = {}) {
-  const queueMax = Number(opts.queueMax ?? 40);
-  const waitMs = Number(opts.waitMs ?? 20000);
+  const limit = Math.max(1, Number(max) || 1);
+  const queueMax = Math.max(1, Number(opts.queueMax ?? 40) || 40);
+  const waitMs = Math.max(1000, Number(opts.waitMs ?? 20000) || 20000);
 
   let active = 0;
   const queue = [];
 
+  function releaseNext() {
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item || item.cancelled) continue;
+      clearTimeout(item.timer);
+      item.released = true;
+      item.resolve();
+      return;
+    }
+  }
+
   return async function run(fn) {
-    if (active >= max) {
+    if (active >= limit) {
       if (queue.length >= queueMax) {
         const e = new Error("Sunucu şu an yoğun. Lütfen biraz sonra tekrar deneyin.");
         e.code = "SERVER_BUSY";
@@ -143,16 +155,26 @@ function createSemaphore(max, opts = {}) {
       }
 
       await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
+        const item = {
+          resolve,
+          reject,
+          released: false,
+          cancelled: false,
+          timer: null
+        };
+
+        item.timer = setTimeout(() => {
+          if (item.released) return;
+          item.cancelled = true;
+          const idx = queue.indexOf(item);
+          if (idx >= 0) queue.splice(idx, 1);
+
           const e = new Error("Sunucu yoğunluğu nedeniyle istek zaman aşımına uğradı. Lütfen tekrar deneyin.");
           e.code = "SERVER_BUSY_TIMEOUT";
           reject(e);
         }, waitMs);
 
-        queue.push(() => {
-          clearTimeout(timer);
-          resolve();
-        });
+        queue.push(item);
       });
     }
 
@@ -161,8 +183,7 @@ function createSemaphore(max, opts = {}) {
       return await fn();
     } finally {
       active -= 1;
-      const next = queue.shift();
-      if (next) next();
+      releaseNext();
     }
   };
 }

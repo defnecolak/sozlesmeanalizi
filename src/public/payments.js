@@ -4,6 +4,22 @@ function $(id) {
   return document.getElementById(id);
 }
 
+
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[-.]/g, "\$&") + "=([^;]*)"));
+  return m ? decodeURIComponent(m[2]) : "";
+}
+
+function csrfToken() {
+  return getCookie("csrf_token");
+}
+
+function withCsrf(headers = {}) {
+  const t = csrfToken();
+  if (t) headers["X-CSRF-Token"] = t;
+  return headers;
+}
+
 const LS_LAST_RESTORE = "avukatim_last_restore_token";
 
 function showToast(msg) {
