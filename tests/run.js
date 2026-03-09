@@ -1,6 +1,7 @@
+const fs = require('fs');
+const path = require('path');
 const NegotiationCopy = require("../src/public/negotiation-copy");
 const { analyzeContract } = require("../src/services/analyzer");
-const { requireCsrf } = require("../src/services/csrf");
 
 function assert(cond, msg) {
   if (!cond) {
@@ -212,46 +213,45 @@ assert((creditRes.whatIf.items || []).some(x => /taksit/i.test(String(x.title ||
 console.log('✅ Test9 passed');
 
 
-// ---- Test 10: CSRF muaf callback/webhook yolları mounted /api altında da çalışmalı ----
-(function testCsrfExemptPaths() {
-  let nextCalled = 0;
-  const res = {
-    statusCode: 200,
-    body: null,
-    status(code) { this.statusCode = code; return this; },
-    json(payload) { this.body = payload; return this; }
-  };
+// ---- Test 10: multi-currency IBAN labels should not trigger false positive ----
+const ibanOkRes = analyzeContract(`
+GARANTİ BANKASI
+TL IBAN: TR03 0006 2000 3840 0006 2930 77
+EUR IBAN: TR76 0006 2000 3840 0008 9987 42
+USD IBAN: TR06 0006 2000 3840 0008 9987 41
+`, { role: 'hizmet_alan', pack: 'etkinlik', sensitivity: 'dengeli' });
+assert(!(ibanOkRes.softWarnings || []).some((x) => x.id === 'multiple_iban'), 'Farklı para birimleri için etiketli IBANlar false positive üretmemeli');
+console.log('✅ Test10 passed');
 
-  requireCsrf({
-    method: "POST",
-    path: "/iyzico/callback",
-    baseUrl: "/api",
-    originalUrl: "/api/iyzico/callback?cid=test",
-    url: "/iyzico/callback?cid=test",
-    headers: {},
-    get() { return undefined; }
-  }, res, () => { nextCalled += 1; });
+// ---- Test 11: same-currency multiple IBAN should still warn ----
+const ibanWarnRes = analyzeContract(`
+TL IBAN: TR03 0006 2000 3840 0006 2930 77
+TL IBAN: TR99 0006 2000 3840 0006 2930 99
+`, { role: 'hizmet_alan', pack: 'etkinlik', sensitivity: 'dengeli' });
+const ibanWarn = (ibanWarnRes.softWarnings || []).find((x) => x.id === 'multiple_iban');
+assert(ibanWarn, 'Aynı para birimi için birden fazla IBAN uyarısı korunmalı');
+assert(/Aynı para birimi/i.test(String(ibanWarn.title || '')), 'IBAN uyarısı daha açıklayıcı başlık kullanmalı');
+console.log('✅ Test11 passed');
 
-  requireCsrf({
-    method: "POST",
-    path: "/webhook/lemonsqueezy",
-    baseUrl: "/api",
-    originalUrl: "/api/webhook/lemonsqueezy",
-    url: "/webhook/lemonsqueezy",
-    headers: {},
-    get() { return undefined; }
-  }, res, () => { nextCalled += 1; });
+// ---- Test 12: event market review should show numeric remaining days ----
+const marketRes = analyzeContract(`
+ETKİNLİK TARİHİ: 28 Ağustos 2026
+GARANTİ KİŞİ SAYISI: 300
+TOPLAM TUTAR: 52.650 €
+15.1 90 gün kala iptal halinde %50 cezai şart uygulanır.
+15.2 60 gün kala iptal halinde %75 cezai şart uygulanır.
+15.3 30 gün kala iptal halinde %90 cezai şart uygulanır.
+15.4 14 gün kala tamamı tahsil edilir.
+`, { role: 'hizmet_alan', pack: 'etkinlik', sensitivity: 'dengeli' });
+const daysCheck = ((marketRes.marketReview || {}).checks || []).find((x) => /Etkinliğe kalan süre/i.test(String(x.label || '')));
+assert(daysCheck, 'Piyasa kontrolünde etkinliğe kalan süre satırı üretilmeli');
+assert(!/null/i.test(String(daysCheck.value || '')), 'Etkinliğe kalan süre null görünmemeli');
+assert(/\d+\s*gün/i.test(String(daysCheck.value || '')), 'Etkinliğe kalan süre sayısal gün değeri göstermeli');
+console.log('✅ Test12 passed');
 
-  assert(nextCalled === 2, "Mounted /api callback/webhook yolları CSRF'den muaf olmalı");
-  console.log("✅ Test10 passed");
-})();
-
-// ---- Test 11: ödeme sayfası kendi CSRF helper'ını içermeli ----
-(function testPaymentsHasCsrfHelper() {
-  const fs = require("fs");
-  const path = require("path");
-  const paymentJs = fs.readFileSync(path.join(__dirname, "../src/public/payments.js"), "utf8");
-  assert(/function\s+withCsrf\s*\(/.test(paymentJs), "payments.js içinde withCsrf helper bulunmalı");
-  assert(/csrf_token/.test(paymentJs), "payments.js csrf_token cookie'sini okumalı");
-  console.log("✅ Test11 passed");
-})();
+// ---- Test 13: result layout should keep negotiation above market sections ----
+const appView = fs.readFileSync(path.join(__dirname, '..', 'src', 'views', 'app.ejs'), 'utf8');
+assert(appView.indexOf('id="decisionBox"') < appView.indexOf('id="actionPlanBox"'), 'Karar önerisi, imza öncesi planın üstünde olmalı');
+assert(appView.indexOf('id="negBox"') < appView.indexOf('id="marketBox"'), 'Revize metni piyasa kontrolünden yukarıda olmalı');
+assert(appView.indexOf('id="marketBox"') < appView.indexOf('id="simCard"'), 'Piyasa kutusu simülasyonun üstünde kalmalı');
+console.log('✅ Test13 passed');

@@ -38,6 +38,17 @@ function daysBetween(a, b) {
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
+function coerceDate(value) {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : null;
+  }
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    const d = new Date(`${value.trim()}T00:00:00Z`);
+    return Number.isFinite(d.getTime()) ? d : null;
+  }
+  return null;
+}
+
 function verdictForRange(value, low, high) {
   if (!Number.isFinite(Number(value))) return { verdict: 'belirsiz', tone: 'muted' };
   const v = Number(value);
@@ -137,7 +148,7 @@ function buildEventMarketReview(ctx) {
   if (!eventMeta || !eventMeta.available) return { available: false };
 
   const now = new Date();
-  const eventDate = eventMeta.eventDate instanceof Date ? eventMeta.eventDate : null;
+  const eventDate = coerceDate(eventMeta.eventDate);
   const daysUntil = eventDate ? daysBetween(now, eventDate) : null;
   const total = eventMeta.total?.amount ?? null;
   const currency = eventMeta.total?.currency ?? eventMeta.total?.currency;

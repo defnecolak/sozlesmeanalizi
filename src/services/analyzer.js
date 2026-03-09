@@ -2184,6 +2184,114 @@ function extractDistinctIbans(text) {
   return Array.from(new Set(norm));
 }
 
+function normalizeCurrencyHint(raw) {
+  const s = String(raw || "").trim().toUpperCase();
+  if (!s) return null;
+  if (s === "₺" || s === "TL" || s === "TRY") return "TRY";
+  if (s === "€" || s === "EUR" || s === "EURO") return "EUR";
+  if (s === "$" || s === "USD") return "USD";
+  if (s === "£" || s === "GBP" || s === "STERLIN") return "GBP";
+  return null;
+}
+
+function detectCurrencyHint(text) {
+  const t = String(text || "");
+  const m = t.match(/(?:^|[\s:(-])(TL|TRY|EUR|EURO|USD|GBP|STERLIN)(?=\s|$|[:)\-])|([₺€$£])/i);
+  if (!m) return null;
+  return normalizeCurrencyHint(m[1] || m[2]);
+}
+
+function extractIbanEntries(text) {
+  const t = String(text || "");
+  const distinct = extractDistinctIbans(t);
+  if (!distinct.length) return [];
+
+  const entries = new Map();
+  distinct.forEach((iban) => {
+    entries.set(iban, { iban, currency: null, contexts: [] });
+  });
+
+  const assign = (iban, currency, context) => {
+    const key = String(iban || "").replace(/\s+/g, "").toUpperCase();
+    const item = entries.get(key);
+    if (!item) return;
+    if (currency && !item.currency) item.currency = currency;
+    const snippet = String(context || "").replace(/\s+/g, " ").trim();
+    if (snippet && !item.contexts.includes(snippet) && item.contexts.length < 2) {
+      item.contexts.push(snippet);
+    }
+  };
+
+  const labeledRe = /(TL|TRY|EUR|EURO|USD|GBP|STERLIN|[₺€$£])\s*IBAN[^\n\rA-Z0-9]{0,20}(TR\d{2}(?:\s?\d{4}){5}\s?\d{2})/gim;
+  let m;
+  while ((m = labeledRe.exec(t))) {
+    assign(m[2], normalizeCurrencyHint(m[1]), m[0]);
+  }
+
+  const lines = t.split(/\r?\n/);
+  const ibanRe = /TR\d{2}(?:\s?\d{4}){5}\s?\d{2}/gim;
+  for (let i = 0; i < lines.length; i += 1) {
+    const prev = lines[i - 1] || "";
+    const cur = lines[i] || "";
+    const next = lines[i + 1] || "";
+    const window = `${prev} ${cur} ${next}`.trim();
+    const ibans = window.match(ibanRe) || [];
+    if (!ibans.length) continue;
+    const currency = detectCurrencyHint(`${prev} ${cur}`) || detectCurrencyHint(`${cur} ${next}`) || detectCurrencyHint(window);
+    ibans.forEach((iban) => assign(iban, currency, window));
+  }
+
+  return Array.from(entries.values());
+}
+
+function buildIbanConsistencyWarning(text) {
+  const entries = extractIbanEntries(text);
+  if (entries.length < 2) return null;
+
+  const unlabeled = entries.filter((x) => !x.currency);
+  const byCurrency = new Map();
+  for (const item of entries) {
+    if (!item.currency) continue;
+    if (!byCurrency.has(item.currency)) byCurrency.set(item.currency, new Set());
+    byCurrency.get(item.currency).add(item.iban);
+  }
+
+  const labeledCount = Array.from(byCurrency.values()).reduce((sum, set) => sum + set.size, 0);
+  const allDistinctCurrencies = labeledCount === entries.length && Array.from(byCurrency.values()).every((set) => set.size === 1);
+  if (!unlabeled.length && allDistinctCurrencies) {
+    return null;
+  }
+
+  const duplicateCurrencies = Array.from(byCurrency.entries())
+    .filter(([, set]) => set.size >= 2)
+    .map(([currency]) => currency);
+
+  if (duplicateCurrencies.length) {
+    const label = duplicateCurrencies.join(", ");
+    return {
+      id: "multiple_iban",
+      title: "Aynı para birimi için birden fazla IBAN görünüyor",
+      severity: "MEDIUM",
+      category: "Tutarlılık",
+      why: `Metinde ${label} için birden fazla farklı IBAN yakaladım. Kur hesabı ayrı olabilir; yine de aynı para biriminde hangi hesabın geçerli olduğu yazılı ve net olmalı.`,
+      templates: ["Aynı para birimi için tek geçerli IBAN açıkça yazılsın; alternatif hesap varsa hangi durumda kullanılacağı netleştirilsin."],
+      points: 0,
+      countsForScore: false,
+    };
+  }
+
+  return {
+    id: "multiple_iban",
+    title: "Birden fazla IBAN görünüyor",
+    severity: "MEDIUM",
+    category: "Tutarlılık",
+    why: "Metinde birden fazla IBAN yakaladım. Bunlar farklı para birimlerine ait olabilir; yine de hangi hesabın hangi para birimi / senaryo için geçerli olduğu yazılı ve resmi olarak doğrulanmalı.",
+    templates: ["Ödeme yapılacak IBAN ve para birimi eşleşmesi açıkça yazılsın; alternatif hesap varsa hangi durumda kullanılacağı son sürümde teyit edilsin."],
+    points: 0,
+    countsForScore: false,
+  };
+}
+
 function extractLabeledTotals(text) {
   const t = String(text || "");
   const out = [];
@@ -2239,19 +2347,8 @@ function extractLabeledDates(text, pack) {
 
 function detectStructuredContradictions(text, pack) {
   const out = [];
-  const ibans = extractDistinctIbans(text);
-  if (ibans.length >= 2) {
-    out.push({
-      id: "multiple_iban",
-      title: "Birden fazla IBAN görünüyor",
-      severity: "MEDIUM",
-      category: "Tutarlılık",
-      why: "Metinde birden fazla IBAN yakaladım. Hangi hesabın geçerli olduğu yazılı ve resmi olarak doğrulanmalı; özellikle ödeme öncesi hesap bilgisini ayrıca teyit et.",
-      templates: ["Ödeme yapılacak tek IBAN/hak sahibi açıkça yazılsın ve son sürümde teyit edilsin."],
-      points: 0,
-      countsForScore: false,
-    });
-  }
+  const ibanWarning = buildIbanConsistencyWarning(text);
+  if (ibanWarning) out.push(ibanWarning);
 
   const totals = extractLabeledTotals(text);
   const distinctTotals = Array.from(new Set(totals.map((x) => x.value)));

@@ -179,17 +179,23 @@
         <ul class="correctness-list" id="correctnessList"></ul>
       </section>
 
-
-      <section class="correctness-box hidden" id="marketBox">
+      <section class="correctness-box hidden" id="decisionBox">
         <div class="correctness-head">
-          <h3>Piyasa / Mantık Kontrolü</h3>
-          <span class="pill" id="marketBadge">—</span>
+          <h3>Karar Önerisi</h3>
+          <span class="pill" id="decisionBadge">—</span>
         </div>
-        <div class="muted" id="marketText">—</div>
-        <ul class="correctness-list" id="marketList"></ul>
-        <div class="muted small" id="marketCaveats" style="margin-top:8px"></div>
+        <div class="muted" id="decisionText">—</div>
+        <div class="plan-grid">
+          <div>
+            <div class="muted small plan-title">Neden?</div>
+            <ul class="correctness-list" id="decisionReasons"></ul>
+          </div>
+          <div>
+            <div class="muted small plan-title">Sonraki adım</div>
+            <ul class="correctness-list" id="decisionNext"></ul>
+          </div>
+        </div>
       </section>
-
 
       <section class="correctness-box hidden" id="actionPlanBox">
         <div class="correctness-head">
@@ -211,56 +217,6 @@
             <ul class="correctness-list" id="actionPlanGood"></ul>
           </div>
         </div>
-      </section>
-
-      <section class="correctness-box hidden" id="decisionBox">
-        <div class="correctness-head">
-          <h3>Karar Önerisi</h3>
-          <span class="pill" id="decisionBadge">—</span>
-        </div>
-        <div class="muted" id="decisionText">—</div>
-        <div class="plan-grid">
-          <div>
-            <div class="muted small plan-title">Neden?</div>
-            <ul class="correctness-list" id="decisionReasons"></ul>
-          </div>
-          <div>
-            <div class="muted small plan-title">Sonraki adım</div>
-            <ul class="correctness-list" id="decisionNext"></ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="correctness-box hidden" id="subscoresBox">
-        <div class="correctness-head">
-          <h3>Alt Skorlar</h3>
-        </div>
-        <div class="subscore-grid" id="subscoresGrid"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="mitigationBox">
-        <div class="correctness-head">
-          <h3>Dengeleyici Maddeler</h3>
-          <span class="pill" id="mitigationBadge">—</span>
-        </div>
-        <div class="muted" id="mitigationText">—</div>
-        <ul class="correctness-list" id="mitigationList"></ul>
-      </section>
-
-      <section class="correctness-box hidden" id="redlineBox">
-        <div class="correctness-head">
-          <h3>Redline / Revize Önerileri</h3>
-        </div>
-        <div class="muted">Aşağıdaki maddeler için karşı tarafa doğrudan revize talebi gönderebilirsin.</div>
-        <div class="redline-grid" id="redlineList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="whatIfBox">
-        <div class="correctness-head">
-          <h3>What-if / Olası Sonuçlar</h3>
-        </div>
-        <div class="muted">Sözleşme çalışmaya başladığında tipik senaryolarda sana nasıl dönebileceğini özetler.</div>
-        <div class="redline-grid" id="whatIfList"></div>
       </section>
 
       <div class="score-grid">
@@ -306,42 +262,37 @@
         <div class="muted small">İpucu: Her risk kartındaki “Revize Metni” alanı tek madde için kısa bir taslak üretir; üstteki kutu ise tüm riskleri bir araya getirir.</div>
       </div>
 
+      <section class="correctness-box hidden" id="redlineBox">
+        <div class="correctness-head">
+          <h3>Redline / Revize Önerileri</h3>
+        </div>
+        <div class="muted">Aşağıdaki maddeler için karşı tarafa doğrudan revize talebi gönderebilirsin.</div>
+        <div class="redline-grid" id="redlineList"></div>
+      </section>
 
-<div class="simulator hidden" id="simCard">
-  <h3 id="simTitle">Maliyet / Piyasa Kontrolü</h3>
-  <div class="muted small" id="simSummary">—</div>
+      <section class="correctness-box hidden" id="whatIfBox">
+        <div class="correctness-head">
+          <h3>What-if / Olası Sonuçlar</h3>
+        </div>
+        <div class="muted">Sözleşme çalışmaya başladığında tipik senaryolarda sana nasıl dönebileceğini özetler.</div>
+        <div class="redline-grid" id="whatIfList"></div>
+      </section>
 
-  <div class="sim-controls" id="simControls">
-    <div>
-      <div class="muted small">İptal: Davete kaç gün kala?</div>
-      <input type="range" id="cancelDays" min="0" max="365" value="60" />
-      <div class="muted small" id="cancelDaysVal">—</div>
-    </div>
+      <section class="correctness-box hidden" id="subscoresBox">
+        <div class="correctness-head">
+          <h3>Alt Skorlar</h3>
+        </div>
+        <div class="subscore-grid" id="subscoresGrid"></div>
+      </section>
 
-    <div>
-      <div class="muted small">Gerçek kişi sayısı</div>
-      <input class="input" id="actualGuests" type="number" min="0" step="1" />
-	      <input type="range" id="actualGuestsRange" min="0" max="600" value="300" />
-	      <div class="muted small" id="actualGuestsVal">—</div>
-      <div class="muted small">Garanti kişi sayısını aşarsan ek maliyet doğabilir.</div>
-    </div>
-  </div>
-
-  <div class="sim-boxes" id="simScenarioBoxes">
-    <div class="sim-box">
-      <div class="sim-title">İptal Senaryosu</div>
-      <div id="cancelResult" class="sim-body">—</div>
-    </div>
-    <div class="sim-box">
-      <div class="sim-title">Kişi Sayısı Senaryosu</div>
-      <div id="guestResult" class="sim-body">—</div>
-    </div>
-  </div>
-
-  <div class="muted small" id="simNote">
-    Not: Bu bölüm sözleşmeden otomatik çıkarım yapar ve yaklaşık değerler üretir. Kesin rakamlar için sözleşme metnini ve yazışmaları esas alın.
-  </div>
-</div>
+      <section class="correctness-box hidden" id="mitigationBox">
+        <div class="correctness-head">
+          <h3>Dengeleyici Maddeler</h3>
+          <span class="pill" id="mitigationBadge">—</span>
+        </div>
+        <div class="muted" id="mitigationText">—</div>
+        <ul class="correctness-list" id="mitigationList"></ul>
+      </section>
 
       <div class="filters">
         <div class="filter-group">
@@ -369,6 +320,52 @@
             <div class="muted small" style="margin-top:6px">Bu listede sadece bu cihazda yapılan son analizler görünür.</div>
             <div id="history" class="history"></div>
           </details>
+        </div>
+      </div>
+
+      <section class="correctness-box hidden" id="marketBox">
+        <div class="correctness-head">
+          <h3>Piyasa / Mantık Kontrolü</h3>
+          <span class="pill" id="marketBadge">—</span>
+        </div>
+        <div class="muted" id="marketText">—</div>
+        <ul class="correctness-list" id="marketList"></ul>
+        <div class="muted small" id="marketCaveats" style="margin-top:8px"></div>
+      </section>
+
+      <div class="simulator hidden" id="simCard">
+        <h3 id="simTitle">Maliyet / Piyasa Kontrolü</h3>
+        <div class="muted small" id="simSummary">—</div>
+
+        <div class="sim-controls" id="simControls">
+          <div>
+            <div class="muted small">İptal: Davete kaç gün kala?</div>
+            <input type="range" id="cancelDays" min="0" max="365" value="60" />
+            <div class="muted small" id="cancelDaysVal">—</div>
+          </div>
+
+          <div>
+            <div class="muted small">Gerçek kişi sayısı</div>
+            <input class="input" id="actualGuests" type="number" min="0" step="1" />
+            <input type="range" id="actualGuestsRange" min="0" max="600" value="300" />
+            <div class="muted small" id="actualGuestsVal">—</div>
+            <div class="muted small">Garanti kişi sayısını aşarsan ek maliyet doğabilir.</div>
+          </div>
+        </div>
+
+        <div class="sim-boxes" id="simScenarioBoxes">
+          <div class="sim-box">
+            <div class="sim-title">İptal Senaryosu</div>
+            <div id="cancelResult" class="sim-body">—</div>
+          </div>
+          <div class="sim-box">
+            <div class="sim-title">Kişi Sayısı Senaryosu</div>
+            <div id="guestResult" class="sim-body">—</div>
+          </div>
+        </div>
+
+        <div class="muted small" id="simNote">
+          Not: Bu bölüm sözleşmeden otomatik çıkarım yapar ve yaklaşık değerler üretir. Kesin rakamlar için sözleşme metnini ve yazışmaları esas alın.
         </div>
       </div>
 
