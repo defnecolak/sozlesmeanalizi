@@ -22,6 +22,22 @@ function withCsrf(headers = {}) {
 
 const LS_LAST_RESTORE = "avukatim_last_restore_token";
 
+// CSRF helper (double-submit cookie)
+function getCookie(name) {
+  try {
+    const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[.$?*|{}()\[\]\\/+^]/g, "\\$&") + "=([^;]*)"));
+    return m ? decodeURIComponent(m[2]) : "";
+  } catch {
+    return "";
+  }
+}
+
+function withCsrf(headers = {}) {
+  const t = getCookie("csrf_token");
+  if (!t) return headers;
+  return { ...headers, "X-CSRF-Token": t };
+}
+
 function showToast(msg) {
   const t = $("toast");
   if (!t) return;

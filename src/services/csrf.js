@@ -60,10 +60,22 @@ function requestPathForMatch(req) {
 }
 
 function isExemptPath(req) {
+HEAD
   const p = requestPathForMatch(req);
+
+2e5f6be (Fix iyzico CSRF exemption, payment CSRF header, and fraudStatus handling)
   // Ödeme sağlayıcı callback'leri / webhook'lar (cross-site gelebilir)
-  if (p.startsWith("/api/iyzico/callback")) return true;
-  if (p.startsWith("/api/webhook/")) return true;
+  //
+  // ÖNEMLİ: Bu middleware `app.use("/api", requireCsrf)` altında çalıştığı için
+  // `req.path` değerinde "/api" prefix'i olmaz. Bu da "/api/..." ile yapılan
+  // eşleşmeleri yanlış yapar.
+  //
+  // Bu yüzden `originalUrl` (veya baseUrl+path) üstünden tam yolu kontrol ediyoruz.
+  const raw = String(req.originalUrl || "");
+  const full = (raw ? raw.split("?")[0] : String((req.baseUrl || "") + (req.path || "")));
+
+  if (full.startsWith("/api/iyzico/callback")) return true;
+  if (full.startsWith("/api/webhook/")) return true;
   return false;
 }
 

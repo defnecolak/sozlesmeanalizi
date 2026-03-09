@@ -616,6 +616,8 @@ router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ 
     const apiOk = String(result?.status || "").toLowerCase() === "success";
     const payStatus = String(result?.paymentStatus || "").toUpperCase();
     const paymentId = String(result?.paymentId || "").trim();
+    const fraudStatusRaw = result?.fraudStatus;
+    const fraudStatus = Number.isFinite(Number(fraudStatusRaw)) ? Number(fraudStatusRaw) : null;
 
     // Save raw info for debugging
     store.iyzicoOrders[cid] = {
@@ -624,22 +626,39 @@ router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ 
       lastResultAt: new Date().toISOString(),
       lastStatus: result?.status || null,
       paymentStatus: result?.paymentStatus || null,
-      paymentId: paymentId || null
+      paymentId: paymentId || null,
+      fraudStatus
     };
 
     if (apiOk && (payStatus === "SUCCESS" || payStatus === "PAID")) {
-      // Grant credits (idempotent by paymentId if present)
-      const orderId = paymentId || cid;
-      await applyOrderCreated({
-        deviceId: String(rec.deviceId || ""),
-        orderId,
-        credits: Number(rec.credits || 0),
-        provider: "iyzico",
-        restoreToken: String(rec.restoreToken || "")
-      });
+      // Fraud / risk kontrolü:
+      // -  1: onay
+      // -  0: incelemede (bekle)
+      // - -1: reddedildi
+      if (fraudStatus === 0) {
+        store.iyzicoOrders[cid].status = "review";
+        store.iyzicoOrders[cid].reviewAt = new Date().toISOString();
+      } else if (fraudStatus === -1) {
+        store.iyzicoOrders[cid].status = "rejected";
+        store.iyzicoOrders[cid].rejectedAt = new Date().toISOString();
+      } else {
+        // Grant credits (idempotent by paymentId if present)
+        const orderId = paymentId || cid;
+        await applyOrderCreated({
+          deviceId: String(rec.deviceId || ""),
+          orderId,
+          credits: Number(rec.credits || 0),
+          provider: "iyzico",
+          restoreToken: String(rec.restoreToken || "")
+        });
 
-      store.iyzicoOrders[cid].status = "paid";
-      store.iyzicoOrders[cid].paidAt = new Date().toISOString();
+        store.iyzicoOrders[cid].status = "paid";
+        store.iyzicoOrders[cid].paidAt = new Date().toISOString();
+      }
+    } else if (apiOk) {
+      // API başarılı ama ödeme başarısız/iptal vs.
+      store.iyzicoOrders[cid].status = "failed";
+      store.iyzicoOrders[cid].failedAt = new Date().toISOString();
     }
 
     await writeStore(store);
