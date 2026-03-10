@@ -422,8 +422,8 @@
     window.__CHECKOUT_URL__ = "<%= checkoutUrl %>";
     window.__PAYMENTS_PROVIDER__ = "<%= paymentsProvider %>";
     window.__CSP_NONCE__ = "<%= cspNonce %>";
-    window.__CHECKOUT_PACKS__ = <%- JSON.stringify(checkoutPacks || []) %>;
-    window.APP_META = <%- JSON.stringify(appMeta || {}) %>;
+    window.__CHECKOUT_PACKS__ = <%- safeJson(checkoutPacks || []) %>;
+    window.APP_META = <%- safeJson(appMeta || {}) %>;
   </script>
   <script src="/public/negotiation-copy.js?v=34"></script>
   <script src="/public/app.js?v=36"></script>

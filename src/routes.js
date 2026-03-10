@@ -523,28 +523,14 @@ router.post("/api/iyzico/initiate", iyzicoInitLimiter, express.json({ limit: "40
     const rt = await createRestoreToken(deviceId, Math.floor(credits));
     if (!rt.ok) return res.status(500).json({ ok: false, error: "Kurtarma kodu üretilemedi." });
 
-    const conversationId = makeConversationId();
+    const iyzipay = createIyzicoClient();
+    if (!iyzipay) return res.status(500).json({ ok: false, error: "IYZICO_API_KEY / IYZICO_SECRET_KEY eksik." });
 
-    // Persist a pending order (so callback can map it back to device+credits).
-    const store = await readStore();
-    if (!store.iyzicoOrders) store.iyzicoOrders = {};
-    store.iyzicoOrders[conversationId] = {
-      deviceId,
-      credits: Math.floor(credits),
-      restoreToken: rt.token,
-      price: Number(pack.price || 0),
-      currency: String(pack.currency || "TRY"),
-      status: "pending",
-      createdAt: new Date().toISOString()
-    };
-    await writeStore(store);
+    const conversationId = makeConversationId();
 
     const base = String(process.env.APP_BASE_URL || "").trim() || `${req.protocol}://${req.get("host")}`;
     const cleanBase = base.replace(/\/$/, "");
     const callbackUrl = `${cleanBase}/api/iyzico/callback?cid=${encodeURIComponent(conversationId)}`;
-
-    const iyzipay = createIyzicoClient();
-    if (!iyzipay) return res.status(500).json({ ok: false, error: "IYZICO_API_KEY / IYZICO_SECRET_KEY eksik." });
 
     const request = buildCheckoutRequest({
       conversationId,
@@ -566,15 +552,22 @@ router.post("/api/iyzico/initiate", iyzicoInitLimiter, express.json({ limit: "40
       return res.status(400).json({ ok: false, error: result?.errorMessage || "Ödeme formu oluşturulamadı." });
     }
 
-    // Store token for debugging (optional)
-    try {
-      const store2 = await readStore();
-      if (store2.iyzicoOrders && store2.iyzicoOrders[conversationId]) {
-        store2.iyzicoOrders[conversationId].token = result.token;
-        store2.iyzicoOrders[conversationId].checkoutCreatedAt = new Date().toISOString();
-        await writeStore(store2);
-      }
-    } catch {}
+    // İyzico formu başarıyla oluştu; pending order'ı ve token'ı tek seferde kaydet.
+    // (Eski kodda 2 ayrı readStore+writeStore vardı → race condition riski.)
+    const store = await readStore();
+    if (!store.iyzicoOrders) store.iyzicoOrders = {};
+    store.iyzicoOrders[conversationId] = {
+      deviceId,
+      credits: Math.floor(credits),
+      restoreToken: rt.token,
+      price: Number(pack.price || 0),
+      currency: String(pack.currency || "TRY"),
+      status: "pending",
+      token: result.token || "",
+      createdAt: new Date().toISOString(),
+      checkoutCreatedAt: new Date().toISOString()
+    };
+    await writeStore(store);
 
     return res.json({
       ok: true,
@@ -590,22 +583,58 @@ router.post("/api/iyzico/initiate", iyzicoInitLimiter, express.json({ limit: "40
   }
 });
 
-// Iyzico callback: iyzico sends POST token back to callbackUrl
+// Ödeme sonucu sayfası: iyzico callback'i kullanıcıyı buraya yönlendirir
+router.get("/odeme-sonuc", (req, res) => {
+  const payment = String(req.query?.payment || "").trim();
+  const detail = String(req.query?.detail || "").trim().slice(0, 120);
+
+  res.setHeader("Cache-Control", "no-store");
+  res.render("payment-result", {
+    appName: process.env.APP_NAME || "Sözleşmem",
+    supportEmail: process.env.SUPPORT_EMAIL || "",
+    baseUrl: appBaseUrl(req),
+    payment,
+    detail
+  });
+});
+
+// Iyzico callback: 3D Secure dönüşünde kullanıcının tarayıcısı POST ile buraya gelir.
+// Düz metin yerine kullanıcıyı sonuç sayfasına redirect ediyoruz.
 router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ extended: false }), express.json({ limit: "40kb" }), async (req, res) => {
+  const base = appBaseUrl(req);
+
+  function redirectResult(status, detail) {
+    const qs = new URLSearchParams({ payment: status });
+    if (detail) qs.set("detail", String(detail).slice(0, 120));
+    return res.redirect(302, `${base}/odeme-sonuc?${qs.toString()}`);
+  }
+
   try {
     const provider = String(process.env.PAYMENTS_PROVIDER || "off").toLowerCase();
-    if (provider !== "iyzico") return res.status(400).send("disabled");
+    if (provider !== "iyzico") return redirectResult("error", "disabled");
 
     const cid = String(req.query?.cid || req.body?.conversationId || "").trim();
     const token = String(req.body?.token || req.query?.token || "").trim();
-    if (!cid || !token) return res.status(200).send("missing");
+    if (!cid || !token) return redirectResult("error", "missing_token");
 
     const store = await readStore();
     const rec = store?.iyzicoOrders?.[cid];
-    if (!rec) return res.status(200).send("unknown_order");
+    if (!rec) return redirectResult("error", "unknown_order");
+
+    // Replay koruması: zaten işlenmiş siparişi tekrar işleme
+    const prevStatus = String(rec.status || "");
+    if (prevStatus === "paid" || prevStatus === "rejected") {
+      return redirectResult(prevStatus === "paid" ? "success" : "rejected", "already_processed");
+    }
+
+    // Token doğrulaması: callback token'ı, store'daki token ile eşleşmeli
+    if (rec.token && token !== rec.token) {
+      try { strikeIp(String(req.ip || ""), "iyzico_token_mismatch"); } catch {}
+      return redirectResult("error", "token_mismatch");
+    }
 
     const iyzipay = createIyzicoClient();
-    if (!iyzipay) return res.status(500).send("config_missing");
+    if (!iyzipay) return redirectResult("error", "config_missing");
 
     const result = await retrieveCheckoutForm(iyzipay, {
       locale: "tr",
@@ -630,19 +659,18 @@ router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ 
       fraudStatus
     };
 
+    let finalStatus = "failed";
+
     if (apiOk && (payStatus === "SUCCESS" || payStatus === "PAID")) {
-      // Fraud / risk kontrolü:
-      // -  1: onay
-      // -  0: incelemede (bekle)
-      // - -1: reddedildi
       if (fraudStatus === 0) {
         store.iyzicoOrders[cid].status = "review";
         store.iyzicoOrders[cid].reviewAt = new Date().toISOString();
+        finalStatus = "review";
       } else if (fraudStatus === -1) {
         store.iyzicoOrders[cid].status = "rejected";
         store.iyzicoOrders[cid].rejectedAt = new Date().toISOString();
+        finalStatus = "rejected";
       } else {
-        // Grant credits (idempotent by paymentId if present)
         const orderId = paymentId || cid;
         await applyOrderCreated({
           deviceId: String(rec.deviceId || ""),
@@ -654,18 +682,19 @@ router.post("/api/iyzico/callback", iyzicoCallbackLimiter, express.urlencoded({ 
 
         store.iyzicoOrders[cid].status = "paid";
         store.iyzicoOrders[cid].paidAt = new Date().toISOString();
+        finalStatus = "success";
       }
     } else if (apiOk) {
-      // API başarılı ama ödeme başarısız/iptal vs.
       store.iyzicoOrders[cid].status = "failed";
       store.iyzicoOrders[cid].failedAt = new Date().toISOString();
+      finalStatus = "failed";
     }
 
     await writeStore(store);
-    return res.status(200).send("ok");
+    return redirectResult(finalStatus);
   } catch (err) {
     logError("routes_error", err, { rid: res.locals.requestId });
-    return res.status(200).send("error");
+    return redirectResult("error", "internal");
   }
 });
 

@@ -188,11 +188,32 @@ function migrateStore(obj) {
   return out;
 }
 
+/**
+ * JSON.parse sonrası __proto__ / constructor / prototype gibi
+ * tehlikeli anahtarları recursive olarak temizler (proto pollution koruması).
+ */
+function sanitizeParsed(obj) {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) obj[i] = sanitizeParsed(obj[i]);
+    return obj;
+  }
+  const DANGEROUS = new Set(["__proto__", "constructor", "prototype"]);
+  for (const key of Object.keys(obj)) {
+    if (DANGEROUS.has(key)) {
+      delete obj[key];
+    } else {
+      obj[key] = sanitizeParsed(obj[key]);
+    }
+  }
+  return obj;
+}
+
 async function readStore() {
   await ensureStore();
   const raw = await fs.readFile(storePath, "utf8");
   try {
-    const obj = JSON.parse(raw);
+    const obj = sanitizeParsed(JSON.parse(raw));
     return purgeOldRecords(migrateStore(obj));
   } catch {
     return purgeOldRecords(migrateStore({}));

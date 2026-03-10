@@ -83,10 +83,23 @@ const APP_NAME = process.env.APP_NAME || "Sözleşmem";
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+// JSON.stringify çıktısını <script> tag'ı içinde güvenli hale getirir.
+// </script>, <!--, <!, U+2028/U+2029 gibi tehlikeli dizileri escape eder.
+// EJS'de <%- safeJson(data) %> şeklinde kullanılır.
+function safeJson(data) {
+  return JSON.stringify(data)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 // Tüm EJS view'lara ortak değişkenler
 app.use((req, res, next) => {
   res.locals.appName = APP_NAME;
   res.locals.appVersion = APP_VERSION;
+  res.locals.safeJson = safeJson;
   next();
 });
 

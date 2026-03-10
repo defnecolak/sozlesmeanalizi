@@ -26,9 +26,9 @@
   <link rel="stylesheet" href="/public/styles.css" />
   <script src="/public/theme.js" defer></script>
   <script nonce="<%= cspNonce %>">
-    window.__CSP_NONCE__ = <%- JSON.stringify(cspNonce) %>;
-    window.__PAY_PACKS__ = <%- JSON.stringify(packs || []) %>;
-    window.__PRESELECT_CREDITS__ = <%- JSON.stringify(preselectCredits || 0) %>;
+    window.__CSP_NONCE__ = <%- safeJson(cspNonce) %>;
+    window.__PAY_PACKS__ = <%- safeJson(packs || []) %>;
+    window.__PRESELECT_CREDITS__ = <%- safeJson(preselectCredits || 0) %>;
   </script>
   <script src="/public/payments.js" defer></script>
 </head>

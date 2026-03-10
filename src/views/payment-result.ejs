@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title><%= appName %> · Ödeme Sonucu</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" href="/public/assets/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/public/assets/icon.png" type="image/png" />
+  <meta name="theme-color" content="#0b1020" />
+
+  <script nonce="<%= cspNonce %>">
+  (function(){
+    try{
+      var k='avukatim_theme';
+      var t=localStorage.getItem(k);
+      if(t!=='light' && t!=='dark'){
+        t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ?'light':'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+  </script>
+
+  <link rel="stylesheet" href="/public/styles.css" />
+  <script src="/public/theme.js" defer></script>
+</head>
+<body>
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="/uygulama">
+        <img class="topnav-icon" src="/public/assets/icon.svg" alt="" />
+        <span class="topnav-name"><%= appName %></span>
+      </a>
+      <nav class="topnav-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="topnav-actions">
+        <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir" title="Koyu/Açık tema"></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="card" style="max-width:560px;margin:48px auto;text-align:center;">
+      <% if (payment === "success") { %>
+        <h1 style="color:var(--clr-ok, #22c55e);margin-bottom:8px;">Ödeme Başarılı</h1>
+        <p>Kredin hesabına eklendi. Artık uygulamaya dönüp analiz yapabilirsin.</p>
+        <p class="muted small">Ödeme bilgilendirmesi e-posta adresine gönderilmiş olabilir.</p>
+      <% } else if (payment === "review") { %>
+        <h1 style="color:var(--clr-warn, #f59e0b);margin-bottom:8px;">Ödeme İnceleniyor</h1>
+        <p>Ödemen güvenlik incelemesinde. Onaylandığında kredin otomatik yüklenecek.</p>
+        <p class="muted small">Bu genellikle birkaç dakika sürer. Sorun devam ederse destek ile iletişime geç.</p>
+      <% } else if (payment === "rejected") { %>
+        <h1 style="color:var(--clr-err, #ef4444);margin-bottom:8px;">Ödeme Reddedildi</h1>
+        <p>Ödemen güvenlik kontrolünden geçemedi. Kartınla ilgili bir sorun olabilir.</p>
+        <p class="muted small">Farklı bir kart deneyebilir veya bankana başvurabilirsin.</p>
+      <% } else if (payment === "failed") { %>
+        <h1 style="color:var(--clr-err, #ef4444);margin-bottom:8px;">Ödeme Başarısız</h1>
+        <p>Ödeme tamamlanamadı. Kart bilgilerini kontrol edip tekrar deneyebilirsin.</p>
+      <% } else { %>
+        <h1 style="color:var(--clr-err, #ef4444);margin-bottom:8px;">Bir Hata Oluştu</h1>
+        <p>Ödeme işlemi sırasında beklenmeyen bir hata oluştu.</p>
+        <% if (detail) { %>
+          <p class="muted small">Detay: <%= detail %></p>
+        <% } %>
+      <% } %>
+
+      <div style="margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="/uygulama" class="btn primary">Uygulamaya Dön</a>
+        <% if (payment !== "success") { %>
+          <a href="/odeme" class="btn">Tekrar Dene</a>
+        <% } %>
+      </div>
+
+      <% if (supportEmail) { %>
+        <p class="muted small" style="margin-top:16px;">
+          Sorun yaşıyorsan: <a href="/iletisim"><%= supportEmail %></a>
+        </p>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

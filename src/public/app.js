@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 // CSRF (double-submit cookie) header'ı için cookie okuma helper'ı
 function getCookie(name) {
-  const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[-.]/g, "\\$&") + "=([^;]*)"));
+  const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[.$?*|{}()\[\]\\/+^-]/g, "\\$&") + "=([^;]*)"));
   return m ? decodeURIComponent(m[2]) : "";
 }
 function csrfToken() {

@@ -52,7 +52,7 @@ function getIyzicoPacks() {
   // JSON array
   // [ {"credits":1,"price":49,"currency":"TRY","label":"1 Kredi"}, ... ]
   const raw = parseJsonEnv(process.env.IYZICO_PACKS, null);
-  let packs = Array.isArray(raw) ? raw : null;
+  let packs = Array.isArray(raw) && raw.length ? raw : null;
 
   if (!packs) {
     // Defaults (you should edit for your pricing)

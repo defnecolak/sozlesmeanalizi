@@ -25,7 +25,7 @@ const LS_LAST_RESTORE = "avukatim_last_restore_token";
 // CSRF helper (double-submit cookie)
 function getCookie(name) {
   try {
-    const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[.$?*|{}()\[\]\\/+^]/g, "\\$&") + "=([^;]*)"));
+    const m = document.cookie.match(new RegExp("(^|; )" + name.replace(/[.$?*|{}()\[\]\\/+^-]/g, "\\$&") + "=([^;]*)"));
     return m ? decodeURIComponent(m[2]) : "";
   } catch {
     return "";
