@@ -342,6 +342,96 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
     doc.moveDown(0.25);
   }
 
+  // Güç Dengesi Göstergesi
+  const powerBalance = ce.powerBalance;
+  if (powerBalance && powerBalance.available) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Güç Dengesi Analizi", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(powerBalance.summary || "");
+    doc.moveDown(0.15);
+    (powerBalance.items || []).slice(0, 8).forEach((it) => {
+      const icon = it.favor === 'counter' ? '⊖' : it.favor === 'partial' ? '⊜' : '?';
+      doc.text(`${icon} ${it.title}: ${it.label} — ${it.reason}`);
+    });
+    doc.moveDown(0.25);
+  }
+
+  // Müzakere Öncelik Sıralaması
+  const negPriority = ce.negotiationPriority;
+  if (negPriority && negPriority.available) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Müzakere Öncelik Sıralaması", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(negPriority.summary || "");
+    if (negPriority.immediate?.length) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text("Hemen pazarlık et:");
+      doc.font("DejaVu").fontSize(10);
+      negPriority.immediate.forEach((it, idx) => {
+        doc.text(`${idx + 1}. ${it.title} — Kabul olasılığı: ${it.likelihoodLabel} (${it.likelihood}%)`);
+        if (it.tip) doc.fillColor("#444").text(`   ${truncate(it.tip, 260)}`).fillColor("#000");
+      });
+      doc.fontSize(11);
+    }
+    if (negPriority.secondary?.length) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text("Fırsat olursa pazarlık et:");
+      doc.font("DejaVu").fontSize(10);
+      negPriority.secondary.forEach((it, idx) => {
+        doc.text(`${idx + 1}. ${it.title} — Kabul olasılığı: ${it.likelihoodLabel}`);
+      });
+      doc.fontSize(11);
+    }
+    doc.moveDown(0.25);
+  }
+
+  // Eksik Madde Tespiti
+  const missingClauses = ce.missingClauses;
+  if (missingClauses && missingClauses.available) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Eksik Madde Tespiti", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(`${missingClauses.summary} Tamamlanma oranı: %${missingClauses.completeness}.`);
+    doc.moveDown(0.15);
+    (missingClauses.missing || []).slice(0, 8).forEach((it) => {
+      const badge = it.importance === 'high' ? '[!]' : it.importance === 'medium' ? '[·]' : '[-]';
+      doc.font("DejaVuBold").fontSize(10).text(`${badge} ${it.label}`);
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(truncate(it.why, 260));
+      doc.fillColor("#000").text(`Öneri: ${truncate(it.suggestion, 260)}`);
+      doc.moveDown(0.1);
+    });
+    doc.fontSize(11);
+    doc.moveDown(0.25);
+  }
+
+  // Süre Haritası
+  const timeline = ce.timelineMap;
+  if (timeline && timeline.available) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Süre Haritası", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(timeline.summary || "");
+    const groups = timeline.groups || {};
+    for (const [cat, items] of Object.entries(groups)) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text(cat);
+      doc.font("DejaVu").fontSize(10);
+      (items || []).forEach((it) => {
+        doc.text(`• ${it.label}: ${it.displayValue}`);
+      });
+    }
+    if (timeline.warnings?.length) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(10).fillColor("#c0392b").text("Uyarılar:");
+      doc.font("DejaVu").fontSize(10);
+      timeline.warnings.forEach(w => doc.text(`• ${truncate(w, 260)}`));
+      doc.fillColor("#000");
+    }
+    doc.fontSize(11);
+    doc.moveDown(0.25);
+  }
+
   // Somut Yeniden Yazım Önerileri
   const rewrites = Array.isArray(ce.rewriteSuggestions?.items) ? ce.rewriteSuggestions.items : [];
   if (rewrites.length) {

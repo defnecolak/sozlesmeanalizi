@@ -542,17 +542,471 @@ function buildExecutiveSummary({ riskScore, riskLevel, issues, pack, decision, s
 
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 6. MADDE BAZLI GÜÇ DENGESİ GÖSTERGESİ
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Her kural id'si için "kimin lehine" bilgisi
+const POWER_BALANCE_MAP = {
+  // Kritik - karşı taraf lehine
+  unilateral_change:       { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Tek taraflı değişiklik hakkı sadece karşı tarafta.' },
+  terminate_without_cause: { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Gerekçesiz fesih hakkı dengesiz.' },
+  no_refund:               { favor: 'counter', label: 'Karşı taraf lehine', reason: 'İade yok = tüm finansal risk sende.' },
+  unlimited_liability:     { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Sınırsız sorumluluk yükü sende.' },
+  indemnity:               { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Geniş tazmin yükümlülüğü sende.' },
+  unilateral_price_increase: { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Fiyatı tek taraflı artırabilir.' },
+  assignment_unilateral:   { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Sözleşmeyi devredebilir, sen edemezsin.' },
+  ip_assignment:           { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Fikri mülkiyet tamamen karşı tarafa geçiyor.' },
+  data_sharing:            { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Veri paylaşımı kontrolü karşı tarafta.' },
+  non_compete:             { favor: 'counter', label: 'Karşı taraf lehine', reason: 'Rekabet yasağı seni kısıtlıyor.' },
+
+  // Orta - kısmen dengesiz
+  penalty_clause:          { favor: 'partial', label: 'Kısmen dengesiz', reason: 'Cezai şart var ama iki tarafa da uygulanabilir.' },
+  auto_renew:              { favor: 'partial', label: 'Kısmen dengesiz', reason: 'Otomatik yenileme iki tarafı da bağlayabilir.' },
+  force_majeure_broad:     { favor: 'partial', label: 'Kısmen dengesiz', reason: 'Mücbir sebep geniş ama bağlama göre değişir.' },
+  broad_confidentiality:   { favor: 'partial', label: 'Kısmen dengesiz', reason: 'Gizlilik yükümlülüğü her iki tarafa da olabilir.' },
+
+  // Muğlak / kontrol et
+  acceptance_missing:      { favor: 'unclear', label: 'Belirsiz', reason: 'Kabul mekanizması netleştirilmeli.' },
+  vague_scope:             { favor: 'unclear', label: 'Belirsiz', reason: 'Kapsamın muğlaklığı her iki tarafı da etkileyebilir.' },
+};
+
+function buildPowerBalance({ issues, role }) {
+  const items = [];
+  let counterCount = 0;
+  let partialCount = 0;
+  let unclearCount = 0;
+
+  for (const issue of (issues || [])) {
+    const id = String(issue.id || '');
+    const pb = POWER_BALANCE_MAP[id];
+    if (pb) {
+      items.push({
+        ruleId: id,
+        title: issue.title,
+        severity: issue.severity,
+        favor: pb.favor,
+        label: pb.label,
+        reason: pb.reason
+      });
+      if (pb.favor === 'counter') counterCount++;
+      else if (pb.favor === 'partial') partialCount++;
+      else unclearCount++;
+    }
+  }
+
+  const total = items.length || 1;
+  const counterPct = Math.round((counterCount / total) * 100);
+
+  let overallBalance = 'dengeli';
+  let overallLabel = 'Genel olarak dengeli';
+  let overallColor = 'low';
+  if (counterPct >= 70) {
+    overallBalance = 'tek_tarafli';
+    overallLabel = 'Ağırlıklı olarak karşı taraf lehine';
+    overallColor = 'high';
+  } else if (counterPct >= 40) {
+    overallBalance = 'kismi_dengesiz';
+    overallLabel = 'Kısmen dengesiz (karşı tarafa meyilli)';
+    overallColor = 'medium';
+  }
+
+  const summary = items.length
+    ? `Tespit edilen ${items.length} maddeden ${counterCount} tanesi açıkça karşı taraf lehine, ${partialCount} tanesi kısmen dengesiz. ${overallLabel}.`
+    : 'Güç dengesi analizi için yeterli veri bulunamadı.';
+
+  return {
+    available: items.length > 0,
+    items,
+    counterCount,
+    partialCount,
+    unclearCount,
+    counterPct,
+    overallBalance,
+    overallLabel,
+    overallColor,
+    summary
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. MÜZAKERE ÖNCELİK SIRALAMASI
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Karşı tarafın kabul etme olasılığı (düşük = zor pazarlık, yüksek = kolay kabul)
+const NEGOTIATION_LIKELIHOOD = {
+  // Kolay kabul (karşı taraf çoğu zaman razı olur)
+  auto_renew: 0.85,
+  acceptance_missing: 0.80,
+  vague_scope: 0.75,
+  broad_confidentiality: 0.70,
+
+  // Orta (pazarlıkla kabul edilebilir)
+  terminate_without_cause: 0.60,
+  penalty_clause: 0.55,
+  non_compete: 0.55,
+  force_majeure_broad: 0.50,
+  data_sharing: 0.50,
+  unilateral_price_increase: 0.45,
+
+  // Zor (karşı taraf direnir ama deneye değer)
+  no_refund: 0.40,
+  indemnity: 0.35,
+  unlimited_liability: 0.35,
+  ip_assignment: 0.30,
+  unilateral_change: 0.30,
+  assignment_unilateral: 0.25,
+};
+
+const SEVERITY_IMPACT = { CRITICAL: 10, HIGH: 7, MEDIUM: 4, LOW: 2 };
+
+function buildNegotiationPriority({ issues }) {
+  const items = [];
+
+  for (const issue of (issues || [])) {
+    const id = String(issue.id || '');
+    const likelihood = NEGOTIATION_LIKELIHOOD[id] || 0.50;
+    const impact = SEVERITY_IMPACT[issue.severity] || 4;
+    const scorePoints = Number(issue.scorePoints || 0);
+
+    // Öncelik skoru = etki × kabul olasılığı × puan ağırlığı
+    const priorityScore = Math.round(impact * likelihood * (1 + scorePoints / 20) * 10) / 10;
+
+    items.push({
+      ruleId: id,
+      title: issue.title,
+      severity: issue.severity,
+      clause: issue.clause || 'İlgili madde',
+      impact,
+      likelihood: Math.round(likelihood * 100),
+      priorityScore,
+      likelihoodLabel: likelihood >= 0.65 ? 'Yüksek' : likelihood >= 0.40 ? 'Orta' : 'Düşük',
+      tip: likelihood >= 0.65
+        ? 'Bu maddeyi değiştirmek genellikle kolay kabul edilir. Öncelikle bununla başla.'
+        : likelihood >= 0.40
+          ? 'Pazarlıkla değiştirilebilir. Net ve gerekçeli bir dille talep et.'
+          : 'Karşı taraf büyük ihtimalle direnecek. Alternatif çözüm (cap, süre sınırı) öner.'
+    });
+  }
+
+  // Öncelik skoruna göre sırala (yüksek → düşük)
+  items.sort((a, b) => b.priorityScore - a.priorityScore);
+
+  // İlk 3'ü "hemen pazarlık et", sonraki 3'ü "fırsat olursa pazarlık et"
+  const immediate = items.slice(0, 3);
+  const secondary = items.slice(3, 6);
+
+  return {
+    available: items.length > 0,
+    items,
+    immediate,
+    secondary,
+    summary: items.length
+      ? `${items.length} madde müzakere edilebilir. İlk ${Math.min(3, items.length)} madde öncelikli.`
+      : 'Müzakere öncelik sıralaması için yeterli risk maddesi bulunamadı.'
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. EKSİK MADDE TESPİTİ
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ESSENTIAL_CLAUSES = {
+  genel: [
+    { id: 'mc_dispute', label: 'Uyuşmazlık çözümü', pattern: /yetkili\s+mahkeme|uygulanacak\s+hukuk|tahkim|arabuluculuk|uyuşmazlık/i, importance: 'high', why: 'Sorun çıktığında nerede/nasıl çözüleceği belirsiz kalır.', suggestion: '"Uyuşmazlıklarda [şehir] Mahkemeleri yetkilidir ve Türk hukuku uygulanır" maddesi ekle.' },
+    { id: 'mc_force_majeure', label: 'Mücbir sebep', pattern: /mücbir\s+sebep|force\s+majeure|doğal\s+afet|salgın|pandemi/i, importance: 'medium', why: 'Deprem, salgın gibi durumlarda tarafların hakları belirsiz kalır.', suggestion: 'Mücbir sebep tanımı ve tarafların bu durumda hakları/yükümlülükleri ekle.' },
+    { id: 'mc_confidentiality', label: 'Gizlilik', pattern: /gizlilik|gizli\s+bilgi|confidential|nda/i, importance: 'medium', why: 'Paylaşılan hassas bilgilerin korunması güvence altında değil.', suggestion: 'Gizlilik yükümlülüğü, süresi ve istisnaları ekle.' },
+    { id: 'mc_termination', label: 'Fesih koşulları', pattern: /fesih|feshedebilir|sona\s+erer|sona\s+erme|süre\s+bitimi/i, importance: 'high', why: 'Sözleşmeden nasıl çıkılacağı belirsiz.', suggestion: 'Fesih bildirim süresi, koşulları ve sonuçlarını (iade, tasfiye) detaylı yaz.' },
+    { id: 'mc_payment', label: 'Ödeme koşulları', pattern: /ödeme|bedel|ücret|fiyat|tutar|fee|payment/i, importance: 'high', why: 'Ödeme tutarı, tarihi ve yöntemi belirsiz.', suggestion: 'Tutar, vade, ödeme yöntemi ve gecikme sonuçlarını net yaz.' },
+    { id: 'mc_liability', label: 'Sorumluluk sınırı', pattern: /sorumluluk|tazmin|zarar|liability|indemnif/i, importance: 'high', why: 'Sorumluluk sınırsız kalabilir.', suggestion: 'Toplam sorumluluk üst sınırı (cap) ve dolaylı zarar istisnası ekle.' },
+    { id: 'mc_data_protection', label: 'Kişisel veri koruma', pattern: /kişisel\s+veri|kvkk|gdpr|veri\s+koruma|data\s+protection/i, importance: 'medium', why: 'KVKK/GDPR uyumluluğu sağlanmamış olabilir.', suggestion: 'Kişisel veri işleme amacı, süresi, aktarımı ve saklama koşullarını ekle.' },
+    { id: 'mc_ip', label: 'Fikri mülkiyet', pattern: /fikri\s+mülkiyet|telif|patent|lisans|intellectual\s+property/i, importance: 'low', why: 'Oluşan eserlerin kime ait olduğu belirsiz.', suggestion: 'Fikri mülkiyet sahipliği, lisans kapsamı ve portföy kullanım hakkını tanımla.' },
+  ],
+  kira: [
+    { id: 'mc_deposit_return', label: 'Depozito iade koşulları', pattern: /depozito\s+iade|depozito.*geri|kapora.*iade/i, importance: 'high', why: 'Depozito ne zaman ve nasıl iade edileceği belirsiz.', suggestion: 'Depozito iadesini tahliyeden sonra 15 gün içinde, hasar yoksa tam iade olarak yaz.' },
+    { id: 'mc_rent_increase', label: 'Kira artış mekanizması', pattern: /kira\s+artış|artış\s+oranı|üfe|tüfe|tüik|endeks/i, importance: 'high', why: 'Yıllık kira artışı belirsiz, sürpriz artış gelebilir.', suggestion: 'Artışı TÜFE/ÜFE veya sabit % ile sınırla, üst sınır koy.' },
+    { id: 'mc_maintenance', label: 'Bakım/onarım sorumluluğu', pattern: /bakım|onarım|tamir|tadilat|maintenance/i, importance: 'medium', why: 'Hangi onarımlar kiracıya, hangileri ev sahibine ait belirsiz.', suggestion: 'Küçük bakım kiracıya, yapısal onarım ev sahibine ait olacak şekilde yaz.' },
+  ],
+  hizmet: [
+    { id: 'mc_scope', label: 'İş kapsamı tanımı', pattern: /kapsam|teslimat|deliverable|işin\s+tanımı|hizmet\s+tanımı/i, importance: 'high', why: 'Ne yapılacağı net değilse kapsam kayması (scope creep) riski var.', suggestion: 'Teslim edilecekler listesi, revizyon sayısı ve süreyi net tanımla.' },
+    { id: 'mc_revision_limit', label: 'Revizyon sınırı', pattern: /revizyon\s+sayısı|(\d+)\s*(?:tur|kez|defa)\s*revizyon|revizyon\s+hakkı/i, importance: 'medium', why: 'Sınırsız revizyon riski var.', suggestion: 'Dahil revizyon sayısını yaz, fazlası için ek ücret tanımla.' },
+    { id: 'mc_acceptance', label: 'Kabul/onay mekanizması', pattern: /kabul|onay|tesellüm|approval|acceptance/i, importance: 'medium', why: 'İşin ne zaman "tamamlanmış" sayılacağı belirsiz.', suggestion: 'Teslimden sonra X gün içinde yazılı onay verilmezse kabul edilmiş sayılır maddesi ekle.' },
+  ],
+  saas: [
+    { id: 'mc_sla', label: 'SLA / Uptime garantisi', pattern: /sla|uptime|erişilebilirlik|%\s*9[0-9]|hizmet\s+seviye/i, importance: 'high', why: 'Hizmet kesintisi durumunda ne olacağı belirsiz.', suggestion: 'En az %99.5 uptime garantisi ve ihlalde kredi/iade mekanizması ekle.' },
+    { id: 'mc_data_export', label: 'Veri taşıma/export hakkı', pattern: /veri\s+taşıma|data\s+export|veri\s+iade|export|veri\s+al/i, importance: 'high', why: 'Hizmetten çıkışta veriler sıkışabilir.', suggestion: 'Fesih sonrası 30 gün içinde standart formatta veri export hakkı iste.' },
+  ],
+  etkinlik: [
+    { id: 'mc_cancel_table', label: 'Kademeli iptal tablosu', pattern: /iptal\s+tablosu|iptal.*gün.*[%％]|cayma.*gün.*[%％]/i, importance: 'high', why: 'İptal bedellerinin zamana göre kademesi belli değil.', suggestion: 'İptal bedellerini kademeli yap: 90+ gün→%10, 60-90→%30 gibi.' },
+    { id: 'mc_headcount', label: 'Kişi sayısı garantisi', pattern: /garanti\s+kişi|minimum\s+kişi|asgari\s+katılım|kişi\s+sayısı/i, importance: 'medium', why: 'Garanti kişi düşüşünde ne olacağı belirsiz.', suggestion: 'Garanti sayısı ve düşüş halinde kişi başı fiyat ayarlamasını yaz.' },
+  ],
+  kredi: [
+    { id: 'mc_early_repay', label: 'Erken ödeme hakkı', pattern: /erken\s+ödeme|erken\s+kapama|peşin\s+ödeme/i, importance: 'high', why: 'Kredinin erken kapatılabilirliği ve bedeli belirsiz.', suggestion: 'Erken ödeme halinde kalan faizden indirim hakkını açıkça yaz.' },
+    { id: 'mc_payment_schedule', label: 'Taksit planı', pattern: /ödeme\s+planı|taksit\s+tablosu|ödeme\s+takvimi/i, importance: 'high', why: 'Taksit tarihleri ve tutarları detaylı gösterilmemiş.', suggestion: 'Tüm taksitlerin tarih ve tutarlarını gösteren bir tablo ekle.' },
+  ],
+};
+
+function buildMissingClauses({ text, pack, issues }) {
+  const p = String(pack || 'genel').toLowerCase();
+  const t = String(text || '');
+  const issueIds = new Set((issues || []).map(x => String(x.id || '')));
+
+  // Genel + sektöre özel
+  const clausesToCheck = [...(ESSENTIAL_CLAUSES.genel || []), ...(ESSENTIAL_CLAUSES[p] || [])];
+
+  const missing = [];
+  const present = [];
+
+  for (const clause of clausesToCheck) {
+    const found = clause.pattern.test(t);
+    if (found) {
+      present.push({ id: clause.id, label: clause.label });
+    } else {
+      missing.push({
+        id: clause.id,
+        label: clause.label,
+        importance: clause.importance,
+        why: clause.why,
+        suggestion: clause.suggestion
+      });
+    }
+  }
+
+  // Önem sırasına göre sırala
+  const importanceOrder = { high: 0, medium: 1, low: 2 };
+  missing.sort((a, b) => (importanceOrder[a.importance] || 2) - (importanceOrder[b.importance] || 2));
+
+  const highCount = missing.filter(m => m.importance === 'high').length;
+
+  return {
+    available: missing.length > 0,
+    missing,
+    present,
+    totalChecked: clausesToCheck.length,
+    missingCount: missing.length,
+    presentCount: present.length,
+    highPriorityCount: highCount,
+    completeness: Math.round((present.length / (clausesToCheck.length || 1)) * 100),
+    summary: missing.length
+      ? `Kontrol edilen ${clausesToCheck.length} temel maddeden ${missing.length} tanesi sözleşmede bulunamadı (${highCount} yüksek öncelikli).`
+      : 'Tüm temel maddeler sözleşmede mevcut.'
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. ZAMANAŞIMI & SÜRE HARİTASI
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildTimelineMap({ text, pack }) {
+  const t = String(text || '');
+  const items = [];
+
+  // Süre ve tarih pattern'leri
+  const patterns = [
+    { type: 'contract_duration', label: 'Sözleşme süresi', re: /sözleşme\s+süresi\s*[:.]?\s*(\d+)\s*(gün|ay|yıl|sene|hafta)/i },
+    { type: 'notice_period', label: 'Fesih bildirim süresi', re: /(?:fesih|iptal|çıkış).*?(\d+)\s*(gün|ay|hafta)\s*(?:önce|önceden|süre)/i },
+    { type: 'cancellation', label: 'İptal/cayma süresi', re: /(?:cayma|iptal).*?(\d+)\s*(gün|ay|hafta)/i },
+    { type: 'payment_due', label: 'Ödeme vadesi', re: /(?:ödeme|vade|fatura).*?(\d+)\s*(gün|ay|hafta)\s*(?:içinde|süre)/i },
+    { type: 'warranty', label: 'Garanti süresi', re: /garanti\s+süresi\s*[:.]?\s*(\d+)\s*(gün|ay|yıl)/i },
+    { type: 'trial_period', label: 'Deneme süresi', re: /deneme\s+süresi\s*[:.]?\s*(\d+)\s*(gün|ay|hafta)/i },
+    { type: 'renewal_notice', label: 'Yenileme bildirim süresi', re: /(?:yenileme|uzatma).*?(\d+)\s*(gün|ay|hafta)\s*(?:önce|önceden)/i },
+    { type: 'delivery', label: 'Teslim süresi', re: /(?:teslim|teslimat).*?(\d+)\s*(gün|ay|hafta)\s*(?:içinde|süre)/i },
+    { type: 'response_time', label: 'Cevap/onay süresi', re: /(?:cevap|yanıt|onay|kabul).*?(\d+)\s*(gün|ay|hafta)\s*(?:içinde|süre)/i },
+    { type: 'confidentiality', label: 'Gizlilik süresi', re: /gizlilik.*?(\d+)\s*(gün|ay|yıl|sene)\s*(?:süre|boyunca|devam)/i },
+    { type: 'non_compete', label: 'Rekabet yasağı süresi', re: /rekabet\s+yasağı.*?(\d+)\s*(gün|ay|yıl|sene)/i },
+    { type: 'deposit_return', label: 'Depozito iade süresi', re: /depozito.*?iade.*?(\d+)\s*(gün|ay|hafta)/i },
+    { type: 'early_termination', label: 'Erken fesih cezası süresi', re: /(?:erken|süresinden\s+önce).*?fesih.*?(\d+)\s*(gün|ay|yıl)/i },
+  ];
+
+  // Tarih pattern'leri
+  const datePatterns = [
+    { type: 'start_date', label: 'Başlangıç tarihi', re: /(?:başlangıç|yürürlük|geçerlilik)\s*(?:tarihi)?\s*[:.]?\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i },
+    { type: 'end_date', label: 'Bitiş tarihi', re: /(?:bitiş|sona\s+erme|son\s+tarih)\s*(?:tarihi)?\s*[:.]?\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i },
+    { type: 'event_date', label: 'Etkinlik tarihi', re: /(?:etkinlik|düğün|organizasyon)\s*(?:tarihi)?\s*[:.]?\s*(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/i },
+  ];
+
+  // Süreleri tespit et
+  for (const p of patterns) {
+    const m = t.match(p.re);
+    if (m) {
+      const value = Number(m[1]);
+      const unit = m[2].toLowerCase();
+      let days = value;
+      if (unit.includes('ay')) days = value * 30;
+      else if (unit.includes('hafta')) days = value * 7;
+      else if (unit.includes('yıl') || unit.includes('sene')) days = value * 365;
+
+      items.push({
+        type: p.type,
+        label: p.label,
+        value,
+        unit: m[2],
+        days,
+        displayValue: `${value} ${m[2]}`,
+        category: categorizeTimeline(p.type)
+      });
+    }
+  }
+
+  // Tarihleri tespit et
+  for (const p of datePatterns) {
+    const m = t.match(p.re);
+    if (m) {
+      items.push({
+        type: p.type,
+        label: p.label,
+        value: m[1],
+        unit: 'tarih',
+        days: 0,
+        displayValue: m[1],
+        category: 'tarih'
+      });
+    }
+  }
+
+  // Kategori bazlı gruplama
+  const groups = {};
+  for (const item of items) {
+    const cat = item.category;
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(item);
+  }
+
+  // Uyarılar
+  const warnings = [];
+  const noticePeriod = items.find(i => i.type === 'notice_period');
+  const contractDuration = items.find(i => i.type === 'contract_duration');
+  if (noticePeriod && noticePeriod.days > 60) {
+    warnings.push(`Fesih bildirim süresi ${noticePeriod.displayValue} — uzun sayılır, kaçırma riski var.`);
+  }
+  if (contractDuration && contractDuration.days > 365 * 2) {
+    warnings.push(`Sözleşme süresi ${contractDuration.displayValue} — uzun vadeli, çıkış koşullarını iyi kontrol et.`);
+  }
+
+  return {
+    available: items.length > 0,
+    items,
+    groups,
+    warnings,
+    totalPeriods: items.length,
+    summary: items.length
+      ? `Sözleşmede ${items.length} adet süre/tarih tespit edildi.`
+      : 'Sözleşmede belirgin süre veya tarih bilgisi bulunamadı.'
+  };
+}
+
+function categorizeTimeline(type) {
+  if (['contract_duration', 'start_date', 'end_date', 'event_date'].includes(type)) return 'Ana Süreler';
+  if (['notice_period', 'cancellation', 'renewal_notice', 'early_termination'].includes(type)) return 'Bildirim & Çıkış';
+  if (['payment_due', 'deposit_return'].includes(type)) return 'Ödeme & İade';
+  if (['warranty', 'delivery', 'response_time', 'trial_period'].includes(type)) return 'Teslim & Garanti';
+  if (['confidentiality', 'non_compete'].includes(type)) return 'Kısıtlamalar';
+  return 'Diğer';
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. RİSK ÖZET KARTI (SHAREABLE)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildRiskSummaryCard({ riskScore, riskLevel, issues, pack, decision, powerBalance, missingClauses, negotiationPriority, timelineMap }) {
+  const topThree = (issues || []).slice(0, 3);
+  const critCount = (issues || []).filter(x => x.severity === 'CRITICAL').length;
+  const highCount = (issues || []).filter(x => x.severity === 'HIGH').length;
+
+  // Kısa başlık
+  const headline = decision?.status === 'İMZALANABİLİR'
+    ? 'Sözleşme genel olarak imzalanabilir görünüyor.'
+    : decision?.status === 'PAZARLIK ET'
+      ? 'İmza öncesi birkaç maddede pazarlık önerilir.'
+      : 'Bu sözleşme mevcut haliyle imzalanmamalı.';
+
+  // Güç dengesi tek satır
+  const balanceLine = powerBalance?.available
+    ? `Güç dengesi: ${powerBalance.overallLabel} (${powerBalance.counterCount}/${powerBalance.items?.length || 0} madde karşı taraf lehine)`
+    : '';
+
+  // Eksik madde tek satır
+  const missingLine = missingClauses?.available
+    ? `Eksik maddeler: ${missingClauses.missingCount} (${missingClauses.highPriorityCount} kritik) — Tamamlanma: %${missingClauses.completeness}`
+    : '';
+
+  // Öncelikli müzakere maddeleri
+  const negotiationLine = negotiationPriority?.immediate?.length
+    ? `Öncelikli pazarlık: ${negotiationPriority.immediate.map(i => i.title).join(', ')}`
+    : '';
+
+  // Süre uyarıları
+  const timelineWarnings = (timelineMap?.warnings || []).join(' ');
+
+  return {
+    available: true,
+    headline,
+    riskScore,
+    riskLevel,
+    decision: decision?.status || 'KONTROL ET',
+    decisionColor: decision?.color || 'medium',
+    packLabel: packLabelTR(pack),
+    criticalCount: critCount,
+    highCount: highCount,
+    totalIssues: (issues || []).length,
+    topThree: topThree.map(it => ({
+      title: it.title,
+      severity: it.severity
+    })),
+    balanceLine,
+    missingLine,
+    negotiationLine,
+    timelineWarnings,
+    // "Kopyalanabilir" metin
+    shareText: [
+      `📋 Sözleşme Analiz Özeti`,
+      `Tür: ${packLabelTR(pack)}`,
+      `Risk Skoru: ${riskScore}/100 (${riskLevel || '—'})`,
+      `Karar: ${decision?.status || 'KONTROL ET'}`,
+      ``,
+      `🔴 Kritik: ${critCount} | 🟠 Yüksek: ${highCount} | Toplam: ${(issues || []).length} risk`,
+      ``,
+      topThree.length ? `En kritik 3 madde:` : '',
+      ...topThree.map((it, i) => `${i + 1}. ${it.title} (${it.severity})`),
+      ``,
+      balanceLine,
+      missingLine,
+      negotiationLine,
+      timelineWarnings ? `⏰ ${timelineWarnings}` : '',
+      ``,
+      `— Sözleşmem ile analiz edildi`
+    ].filter(Boolean).join('\n')
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ANA FONKSİYON - Tüm içerik iyileştirmelerini birleştir
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildContentEnhancements({ text, issues, pack, riskScore, riskLevel, severityCounts, decision, subScores }) {
+function buildContentEnhancements({ text, issues, pack, riskScore, riskLevel, severityCounts, decision, subScores, role }) {
   const ratioAnalysis = buildRatioAnalysis({ text, issues, pack });
   const sectorRedFlags = buildSectorRedFlags({ text, pack });
   const comparativeStats = buildComparativeStats({ riskScore, issues, pack, severityCounts });
   const rewriteSuggestions = buildRewriteSuggestions({ issues });
+
+  // Yeni modüller (Faz 2)
+  const powerBalance = buildPowerBalance({ issues, role });
+  const negotiationPriority = buildNegotiationPriority({ issues });
+  const missingClauses = buildMissingClauses({ text, pack, issues });
+  const timelineMap = buildTimelineMap({ text, pack });
+
   const executiveSummary = buildExecutiveSummary({
     riskScore, riskLevel, issues, pack, decision, subScores,
     comparativeStats, sectorRedFlags, ratioAnalysis
+  });
+
+  const riskSummaryCard = buildRiskSummaryCard({
+    riskScore, riskLevel, issues, pack, decision,
+    powerBalance, missingClauses, negotiationPriority, timelineMap
   });
 
   return {
@@ -560,7 +1014,12 @@ function buildContentEnhancements({ text, issues, pack, riskScore, riskLevel, se
     sectorRedFlags,
     comparativeStats,
     rewriteSuggestions,
-    executiveSummary
+    executiveSummary,
+    powerBalance,
+    negotiationPriority,
+    missingClauses,
+    timelineMap,
+    riskSummaryCard
   };
 }
 
@@ -572,4 +1031,9 @@ module.exports = {
   buildComparativeStats,
   buildRewriteSuggestions,
   buildExecutiveSummary,
+  buildPowerBalance,
+  buildNegotiationPriority,
+  buildMissingClauses,
+  buildTimelineMap,
+  buildRiskSummaryCard,
 };

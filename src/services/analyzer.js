@@ -2918,7 +2918,8 @@ const contentEnhancements = buildContentEnhancements({
   riskLevel: levelInfo.level,
   severityCounts,
   decision,
-  subScores
+  subScores,
+  role
 });
 
 return {

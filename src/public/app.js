@@ -1334,6 +1334,133 @@ function renderContentEnhancements(analysis) {
       `).join('');
     }
   }
+
+  // Güç Dengesi
+  const pbBox = $("powerBalanceBox");
+  const pbList = $("powerBalanceList");
+  const pbContent = $("powerBalanceContent");
+  const pbBadge = $("powerBalanceBadge");
+  const pb = ce.powerBalance;
+  if (pbBox && pb && pb.available) {
+    pbBox.classList.remove('hidden');
+    if (pbBadge) {
+      pbBadge.textContent = pb.overallLabel || '—';
+      pbBadge.className = `pill pill-${pb.overallColor || 'medium'}`;
+    }
+    if (pbContent) pbContent.innerHTML = `<div style="margin-top:8px">${escapeHtml(pb.summary || '')}</div>`;
+    if (pbList) {
+      pbList.innerHTML = (pb.items || []).slice(0, 8).map((it) => {
+        const colorMap = { counter: '#e74c3c', partial: '#f39c12', unclear: '#95a5a6' };
+        const iconMap = { counter: '⊖', partial: '⊜', unclear: '?' };
+        return `
+          <div class="redline-card" style="border-left:3px solid ${colorMap[it.favor] || '#ccc'}">
+            <div class="item-title">${iconMap[it.favor] || ''} ${escapeHtml(it.title || '')}</div>
+            <div style="margin-top:4px;font-weight:600;color:${colorMap[it.favor] || '#333'}">${escapeHtml(it.label || '')}</div>
+            <div class="muted small" style="margin-top:4px">${escapeHtml(it.reason || '')}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  } else if (pbBox) { pbBox.classList.add('hidden'); }
+
+  // Müzakere Öncelik Sıralaması
+  const npBox = $("negotiationPriorityBox");
+  const npContent = $("negotiationPriorityContent");
+  const np = ce.negotiationPriority;
+  if (npBox && npContent && np && np.available) {
+    npBox.classList.remove('hidden');
+    let html = `<div style="margin-top:8px">${escapeHtml(np.summary || '')}</div>`;
+    if (np.immediate?.length) {
+      html += `<div style="margin-top:12px;font-weight:700">Hemen pazarlık et:</div>`;
+      html += np.immediate.map((it, i) => `
+        <div style="margin:8px 0;padding:10px;background:#fff3e0;border-radius:8px;border-left:3px solid #f39c12">
+          <div style="font-weight:600">${i + 1}. ${escapeHtml(it.title)}</div>
+          <div style="margin-top:4px;font-size:0.9em">Kabul olasılığı: <strong>${escapeHtml(it.likelihoodLabel)}</strong> (${it.likelihood}%)</div>
+          <div class="muted small" style="margin-top:4px">${escapeHtml(it.tip || '')}</div>
+        </div>
+      `).join('');
+    }
+    if (np.secondary?.length) {
+      html += `<div style="margin-top:12px;font-weight:700">Fırsat olursa pazarlık et:</div>`;
+      html += np.secondary.map((it, i) => `
+        <div style="margin:6px 0;padding:8px;background:#f5f5f5;border-radius:6px">
+          <span style="font-weight:600">${i + 1}. ${escapeHtml(it.title)}</span>
+          <span class="muted small"> — Kabul: ${escapeHtml(it.likelihoodLabel)}</span>
+        </div>
+      `).join('');
+    }
+    npContent.innerHTML = html;
+  } else if (npBox) { npBox.classList.add('hidden'); }
+
+  // Eksik Madde Tespiti
+  const mcBox = $("missingClausesBox");
+  const mcList = $("missingClausesList");
+  const mcContent = $("missingClausesContent");
+  const mcBadge = $("missingClausesBadge");
+  const mc = ce.missingClauses;
+  if (mcBox && mc && mc.available) {
+    mcBox.classList.remove('hidden');
+    if (mcBadge) {
+      mcBadge.textContent = `%${mc.completeness} tamamlanma`;
+      mcBadge.className = `pill pill-${mc.completeness >= 80 ? 'low' : mc.completeness >= 50 ? 'medium' : 'high'}`;
+    }
+    if (mcContent) mcContent.innerHTML = `<div style="margin-top:8px">${escapeHtml(mc.summary || '')}</div>`;
+    if (mcList) {
+      mcList.innerHTML = (mc.missing || []).slice(0, 8).map((it) => {
+        const impColor = it.importance === 'high' ? '#e74c3c' : it.importance === 'medium' ? '#f39c12' : '#95a5a6';
+        return `
+          <div class="redline-card" style="border-left:3px solid ${impColor}">
+            <div class="item-title">${escapeHtml(it.label || '')}</div>
+            <div style="margin-top:4px">${escapeHtml(it.why || '')}</div>
+            <div style="margin-top:6px;color:#27ae60;font-weight:600">Öneri: ${escapeHtml(it.suggestion || '')}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  } else if (mcBox) { mcBox.classList.add('hidden'); }
+
+  // Süre Haritası
+  const tmBox = $("timelineMapBox");
+  const tmContent = $("timelineMapContent");
+  const tm = ce.timelineMap;
+  if (tmBox && tmContent && tm && tm.available) {
+    tmBox.classList.remove('hidden');
+    let html = `<div style="margin-top:8px">${escapeHtml(tm.summary || '')}</div>`;
+    const groups = tm.groups || {};
+    for (const [cat, items] of Object.entries(groups)) {
+      html += `<div style="margin-top:12px;font-weight:700">${escapeHtml(cat)}</div>`;
+      html += (items || []).map(it => `
+        <div style="margin:4px 0;padding:6px 10px;background:#f0f4ff;border-radius:6px;display:inline-block;margin-right:8px">
+          <span style="font-weight:600">${escapeHtml(it.label)}:</span> ${escapeHtml(it.displayValue)}
+        </div>
+      `).join('');
+    }
+    if (tm.warnings?.length) {
+      html += `<div style="margin-top:12px;color:#c0392b;font-weight:600">Uyarılar:</div>`;
+      html += tm.warnings.map(w => `<div style="margin:4px 0;color:#c0392b">${escapeHtml(w)}</div>`).join('');
+    }
+    tmContent.innerHTML = html;
+  } else if (tmBox) { tmBox.classList.add('hidden'); }
+
+  // Risk Özet Kartı
+  const rcBox = $("riskSummaryCardBox");
+  const rcContent = $("riskSummaryCardContent");
+  const rc = ce.riskSummaryCard;
+  if (rcBox && rcContent && rc && rc.available) {
+    rcBox.classList.remove('hidden');
+    rcContent.innerHTML = `
+      <div style="margin-top:12px;padding:16px;background:#f8f9fa;border-radius:10px;border:1px solid #dee2e6;white-space:pre-wrap;font-family:monospace;font-size:0.85em;line-height:1.6">${escapeHtml(rc.shareText || '')}</div>
+    `;
+    const btnCopy = $("btnCopyRiskCard");
+    if (btnCopy) {
+      btnCopy.onclick = () => {
+        navigator.clipboard.writeText(rc.shareText || '').then(() => {
+          btnCopy.textContent = 'Kopyalandı!';
+          setTimeout(() => { btnCopy.textContent = 'Özeti Kopyala'; }, 2000);
+        }).catch(() => {});
+      };
+    }
+  } else if (rcBox) { rcBox.classList.add('hidden'); }
 }
 
 function renderScoreExplain(summary) {
