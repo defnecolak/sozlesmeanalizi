@@ -4,6 +4,7 @@ const { extractEventMeta } = require("./eventSimulator");
 const { marketReviewForPack } = require("./marketReview");
 const { getPackProfile } = require("./packProfiles");
 const { buildRedlinePlaybook, buildSubscores, buildDecisionEngine, buildWhatIfScenarios } = require("./advancedInsights");
+const { buildContentEnhancements } = require("./contentEnhancements");
 
 const PACK_ALIASES = {
   is: ["hizmet"],
@@ -2907,6 +2908,19 @@ if (pack === "etkinlik") {
     it.moneyImpact = computeMoneyImpact(it, ctx);
   }
 }
+
+// İçerik iyileştirmeleri: oran analizi, sektörel bayraklar, karşılaştırma, yeniden yazım, yönetici özeti
+const contentEnhancements = buildContentEnhancements({
+  text,
+  issues: groupedIssues,
+  pack,
+  riskScore,
+  riskLevel: levelInfo.level,
+  severityCounts,
+  decision,
+  subScores
+});
+
 return {
     meta: {
       analyzedAt: new Date().toISOString(),
@@ -2939,7 +2953,11 @@ return {
       decision,
       reviewVerdict,
       redlineCount: redlinePlaybook.length,
-      whatIfCount: Array.isArray(whatIf?.items) ? whatIf.items.length : 0
+      whatIfCount: Array.isArray(whatIf?.items) ? whatIf.items.length : 0,
+      hasContentEnhancements: true,
+      ratioCount: contentEnhancements.ratioAnalysis?.items?.length || 0,
+      sectorFlagCount: contentEnhancements.sectorRedFlags?.items?.length || 0,
+      rewriteCount: contentEnhancements.rewriteSuggestions?.items?.length || 0
     },
     topRisks,
     issues: groupedIssues,
@@ -2954,7 +2972,8 @@ return {
     subScores,
     decision,
     redlinePlaybook,
-    whatIf
+    whatIf,
+    contentEnhancements
   };
 }
 

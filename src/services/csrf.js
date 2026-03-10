@@ -60,10 +60,6 @@ function requestPathForMatch(req) {
 }
 
 function isExemptPath(req) {
-HEAD
-  const p = requestPathForMatch(req);
-
-2e5f6be (Fix iyzico CSRF exemption, payment CSRF header, and fraudStatus handling)
   // Ödeme sağlayıcı callback'leri / webhook'lar (cross-site gelebilir)
   //
   // ÖNEMLİ: Bu middleware `app.use("/api", requireCsrf)` altında çalıştığı için

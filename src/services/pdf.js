@@ -57,6 +57,39 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
   const m = analysis?.meta || {};
   const ex = extracted || {};
 
+  // Yönetici Özeti (Executive Summary)
+  const ce = analysis?.contentEnhancements || {};
+  const execSummary = ce.executiveSummary;
+  if (execSummary && execSummary.available) {
+    doc.font("DejaVuBold").fontSize(16).text("Yönetici Özeti", { underline: true });
+    doc.moveDown(0.4);
+    doc.font("DejaVuBold").fontSize(12).text(`Karar: ${execSummary.status}`);
+    doc.moveDown(0.2);
+    doc.font("DejaVu").fontSize(11).text(execSummary.overview);
+    doc.moveDown(0.2);
+    doc.font("DejaVuBold").fontSize(11).text("Öneri:");
+    doc.font("DejaVu").fontSize(11).text(execSummary.action);
+    if (execSummary.topThree) {
+      doc.moveDown(0.15);
+      doc.font("DejaVuBold").fontSize(11).text("En kritik 3 madde:");
+      doc.font("DejaVu").fontSize(10).text(execSummary.topThree);
+    }
+    if (execSummary.comparison) {
+      doc.moveDown(0.15);
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(execSummary.comparison).fillColor("#000");
+    }
+    if (execSummary.sectorFlags) {
+      doc.moveDown(0.1);
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(execSummary.sectorFlags).fillColor("#000");
+    }
+    if (execSummary.ratioWarning) {
+      doc.moveDown(0.1);
+      doc.font("DejaVuBold").fontSize(10).fillColor("#444").text(execSummary.ratioWarning).fillColor("#000");
+    }
+    doc.moveDown(0.6);
+    doc.font("DejaVu").fontSize(11);
+  }
+
   // Summary
   doc.font("DejaVuBold").fontSize(14).text("Özet", { underline: true });
   doc.moveDown(0.4);
@@ -253,6 +286,83 @@ function buildPdfReport({ analysis, text, appName, extracted, options }) {
       if (it.why) doc.fontSize(10).fillColor("#444").text(truncate(String(it.why || ""), 220)).fillColor("#000").fontSize(11);
       doc.moveDown(0.25);
     });
+  }
+
+  // ── İçerik İyileştirmeleri ──────────────────────────────────────────
+
+  // Oran Analizi
+  const ratioItems = Array.isArray(ce.ratioAnalysis?.items) ? ce.ratioAnalysis.items : [];
+  if (ratioItems.length) {
+    doc.moveDown(0.25);
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Oran Analizi", { underline: true });
+    doc.moveDown(0.35);
+    ratioItems.forEach((it) => {
+      doc.font("DejaVuBold").fontSize(11).text(`${it.title}: ${it.value} — ${it.assessment}`);
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(truncate(String(it.detail || ""), 260));
+      if (it.benchmark) doc.text(`Karşılaştırma: ${it.benchmark}`);
+      doc.fillColor("#000").fontSize(11);
+      doc.moveDown(0.2);
+    });
+    doc.moveDown(0.25);
+  }
+
+  // Sektöre Özel Kırmızı Bayraklar
+  const sectorFlags = Array.isArray(ce.sectorRedFlags?.items) ? ce.sectorRedFlags.items : [];
+  if (sectorFlags.length) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Sektöre Özel Eksik/Belirsiz Alanlar", { underline: true });
+    doc.moveDown(0.35);
+    sectorFlags.forEach((it, idx) => {
+      doc.font("DejaVuBold").fontSize(11).text(`${idx + 1}. ${it.title}`);
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(truncate(String(it.detail || ""), 260));
+      doc.fillColor("#000").fontSize(11).text(`Öneri: ${truncate(String(it.suggestion || ""), 260)}`);
+      doc.moveDown(0.2);
+    });
+    doc.moveDown(0.25);
+  }
+
+  // Karşılaştırmalı İstatistik
+  const compStats = ce.comparativeStats;
+  if (compStats && compStats.available) {
+    if (doc.y > 700) doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Karşılaştırmalı Analiz", { underline: true });
+    doc.moveDown(0.35);
+    doc.font("DejaVu").fontSize(11).text(compStats.summary || "");
+    const prevalence = Array.isArray(compStats.prevalence) ? compStats.prevalence : [];
+    if (prevalence.length) {
+      doc.moveDown(0.2);
+      doc.font("DejaVuBold").fontSize(11).text("Piyasa Yaygınlığı:");
+      doc.font("DejaVu").fontSize(10);
+      prevalence.slice(0, 6).forEach((it) => {
+        doc.text(`• ${it.title}: ${it.label}`);
+      });
+      doc.fontSize(11);
+    }
+    doc.moveDown(0.25);
+  }
+
+  // Somut Yeniden Yazım Önerileri
+  const rewrites = Array.isArray(ce.rewriteSuggestions?.items) ? ce.rewriteSuggestions.items : [];
+  if (rewrites.length) {
+    doc.addPage();
+    doc.font("DejaVuBold").fontSize(14).text("Somut Yeniden Yazım Önerileri", { underline: true });
+    doc.moveDown(0.35);
+    rewrites.slice(0, 5).forEach((it, idx) => {
+      doc.font("DejaVuBold").fontSize(11).text(`${idx + 1}. ${it.title} (${it.clause})`);
+      doc.moveDown(0.1);
+      doc.font("DejaVuBold").fontSize(10).fillColor("#c0392b").text("Mevcut (sorunlu):");
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(truncate(String(it.before || ""), 300));
+      doc.moveDown(0.1);
+      doc.font("DejaVuBold").fontSize(10).fillColor("#27ae60").text("Önerilen (dengeli):");
+      doc.font("DejaVu").fontSize(10).fillColor("#444").text(truncate(String(it.after || ""), 340));
+      doc.moveDown(0.1);
+      doc.fillColor("#000").font("DejaVuBold").fontSize(10).text(`Kilit fark: ${truncate(String(it.key || ""), 200)}`);
+      doc.font("DejaVu").fontSize(11).fillColor("#000");
+      doc.moveDown(0.35);
+      if (doc.y > 700) doc.addPage();
+    });
+    doc.moveDown(0.25);
   }
 
   // Revize metni (karşı tarafa gönderilebilir özet)

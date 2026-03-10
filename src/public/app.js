@@ -1227,6 +1227,115 @@ function renderWhatIf(analysis) {
   `).join('');
 }
 
+// ── İçerik İyileştirmeleri Render ────────────────────────────────────
+
+function renderContentEnhancements(analysis) {
+  const ce = analysis?.contentEnhancements;
+  if (!ce) return;
+
+  // Yönetici Özeti
+  const execBox = $("executiveSummaryBox");
+  const execContent = $("executiveSummaryContent");
+  const execBadge = $("execStatusBadge");
+  const exec = ce.executiveSummary;
+  if (execBox && execContent && exec && exec.available) {
+    execBox.classList.remove('hidden');
+    if (execBadge) {
+      execBadge.textContent = exec.status || '—';
+      execBadge.className = `pill pill-${exec.statusColor || 'medium'}`;
+    }
+    execContent.innerHTML = `
+      <div style="margin-top:8px"><strong>${escapeHtml(exec.overview || '')}</strong></div>
+      <div style="margin-top:8px">${escapeHtml(exec.action || '')}</div>
+      ${exec.topThree ? `<div class="muted small" style="margin-top:8px">${escapeHtml(exec.topThree)}</div>` : ''}
+      ${exec.comparison ? `<div class="muted small" style="margin-top:6px">${escapeHtml(exec.comparison)}</div>` : ''}
+      ${exec.sectorFlags ? `<div class="muted small" style="margin-top:4px">${escapeHtml(exec.sectorFlags)}</div>` : ''}
+      ${exec.ratioWarning ? `<div style="margin-top:6px;color:#c0392b;font-weight:600;font-size:0.9em">${escapeHtml(exec.ratioWarning)}</div>` : ''}
+    `;
+  } else if (execBox) {
+    execBox.classList.add('hidden');
+  }
+
+  // Oran Analizi
+  const ratioBox = $("ratioAnalysisBox");
+  const ratioList = $("ratioAnalysisList");
+  const ratioItems = Array.isArray(ce.ratioAnalysis?.items) ? ce.ratioAnalysis.items : [];
+  if (ratioBox && ratioList) {
+    if (!ratioItems.length) { ratioBox.classList.add('hidden'); ratioList.innerHTML = ''; }
+    else {
+      ratioBox.classList.remove('hidden');
+      ratioList.innerHTML = ratioItems.map((it) => `
+        <div class="redline-card">
+          <div class="item-title">${escapeHtml(it.title || '')}: <span class="badge badge-${(it.color || 'low').toUpperCase()}">${escapeHtml(it.value || '')}</span></div>
+          <div style="margin-top:6px">${escapeHtml(it.detail || '')}</div>
+          ${it.benchmark ? `<div class="muted small" style="margin-top:4px">${escapeHtml(it.benchmark)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+
+  // Sektöre Özel Bayraklar
+  const flagBox = $("sectorRedFlagsBox");
+  const flagList = $("sectorRedFlagsList");
+  const flags = Array.isArray(ce.sectorRedFlags?.items) ? ce.sectorRedFlags.items : [];
+  if (flagBox && flagList) {
+    if (!flags.length) { flagBox.classList.add('hidden'); flagList.innerHTML = ''; }
+    else {
+      flagBox.classList.remove('hidden');
+      flagList.innerHTML = flags.map((it) => `
+        <div class="redline-card">
+          <div class="item-title">${escapeHtml(it.title || '')}</div>
+          <div style="margin-top:6px">${escapeHtml(it.detail || '')}</div>
+          <div style="margin-top:6px;color:#27ae60;font-weight:600">Öneri: ${escapeHtml(it.suggestion || '')}</div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Karşılaştırmalı İstatistik
+  const compBox = $("comparativeStatsBox");
+  const compContent = $("comparativeStatsContent");
+  const comp = ce.comparativeStats;
+  if (compBox && compContent && comp && comp.available) {
+    compBox.classList.remove('hidden');
+    const prevHtml = Array.isArray(comp.prevalence) && comp.prevalence.length
+      ? `<div style="margin-top:10px"><strong>Piyasa Yaygınlığı:</strong></div>` +
+        comp.prevalence.slice(0, 6).map(p => `<div class="muted small" style="margin:4px 0">• <strong>${escapeHtml(p.title)}</strong>: ${escapeHtml(p.label)}</div>`).join('')
+      : '';
+    compContent.innerHTML = `
+      <div style="margin-top:8px">${escapeHtml(comp.summary || '')}</div>
+      ${prevHtml}
+    `;
+  } else if (compBox) {
+    compBox.classList.add('hidden');
+  }
+
+  // Yeniden Yazım Önerileri
+  const rwBox = $("rewriteSuggestionsBox");
+  const rwList = $("rewriteSuggestionsList");
+  const rewrites = Array.isArray(ce.rewriteSuggestions?.items) ? ce.rewriteSuggestions.items : [];
+  if (rwBox && rwList) {
+    if (!rewrites.length) { rwBox.classList.add('hidden'); rwList.innerHTML = ''; }
+    else {
+      rwBox.classList.remove('hidden');
+      rwList.innerHTML = rewrites.slice(0, 5).map((it) => `
+        <div class="redline-card">
+          <div class="item-title">${escapeHtml(it.title || '')} <span class="badge badge-${(it.severity || 'MEDIUM')}">${sevTr(it.severity || '')}</span></div>
+          <div style="margin-top:8px;padding:8px;background:#ffeaea;border-radius:6px">
+            <div style="font-weight:600;color:#c0392b;font-size:0.85em">Mevcut (sorunlu):</div>
+            <div style="font-size:0.9em;margin-top:4px">${escapeHtml(it.before || '')}</div>
+          </div>
+          <div style="margin-top:8px;padding:8px;background:#e8f8e8;border-radius:6px">
+            <div style="font-weight:600;color:#27ae60;font-size:0.85em">Önerilen (dengeli):</div>
+            <div style="font-size:0.9em;margin-top:4px">${escapeHtml(it.after || '')}</div>
+          </div>
+          <div style="margin-top:6px;font-size:0.85em"><strong>Kilit fark:</strong> ${escapeHtml(it.key || '')}</div>
+        </div>
+      `).join('');
+    }
+  }
+}
+
 function renderScoreExplain(summary) {
   const ex = summary?.scoreExplain || null;
 
@@ -1314,6 +1423,7 @@ function renderAll(analysis, extracted) {
   renderScoreExplain(s);
   renderRedlinePlaybook(analysis);
   renderWhatIf(analysis);
+  renderContentEnhancements(analysis);
 
   renderTop3(analysis.topRisks || []);
   renderFilters(s);
