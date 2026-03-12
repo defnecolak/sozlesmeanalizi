@@ -1388,6 +1388,58 @@ code{
 .subscore-high{ background: linear-gradient(90deg, #ef4444, #fb7185); }
 
 /* ========================================
+   PAYMENT LOGOS
+   ======================================== */
+.payment-logos{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+}
+
+.pay-logo{
+  flex-shrink: 0;
+}
+
+.pay-logo-iyzico{
+  height: 20px;
+  width: auto;
+}
+
+.pay-logo-visa{
+  height: 16px;
+  width: auto;
+}
+
+.pay-logo-mc{
+  height: 22px;
+  width: auto;
+}
+
+.pay-logo-sep{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pay-logo-divider{
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+:root[data-theme="light"] .payment-logos{
+  background: rgba(99,102,241,0.03);
+  border-color: rgba(99,102,241,0.10);
+}
+
+/* ========================================
    REDLINE / CONTENT ENHANCEMENT CARDS
    ======================================== */
 .redline-grid{
