@@ -255,12 +255,6 @@ a:hover{ color: var(--brand); text-decoration: none; }
 }
 .iconbtn:active{ transform: translateY(0px); }
 
-@media (max-width: 900px){
-  .topnav-links{ display: none; }
-  .topnav-inner{ padding: 10px 16px; }
-  .container{ padding: 16px; }
-}
-
 /* ========================================
    CARDS & SURFACES
    ======================================== */
@@ -428,11 +422,6 @@ details.faq > div{ margin-top: 10px; line-height: 1.5; }
   display: grid;
   grid-template-columns: 280px 280px 1fr;
   gap: 12px;
-}
-
-@media (max-width: 900px){
-  .grid3{ grid-template-columns: 1fr; }
-  .grid2{ grid-template-columns: 1fr; }
 }
 
 /* ========================================
@@ -695,10 +684,6 @@ input[type="file"]:focus{
   margin-top: 10px;
 }
 .plan-title{ font-weight: 700; margin-bottom: 4px; }
-@media (max-width: 900px){
-  .plan-grid{ grid-template-columns: 1fr; }
-}
-
 /* ========================================
    FILTERS & CHIPS
    ======================================== */
@@ -909,15 +894,6 @@ mark{
 .footer-note{ margin-top: 10px; }
 .footer{ margin-top: 10px; text-align: center; }
 
-@media (max-width: 900px){
-  .score-grid{ grid-template-columns: 1fr; }
-  .split{ grid-template-columns: 1fr; }
-  .hero-grid{ grid-template-columns: 1fr; }
-  .pricing-grid{ grid-template-columns: 1fr; }
-  .history{ max-height: none; }
-  .history-file{ -webkit-line-clamp: 2; }
-}
-
 /* ========================================
    TOP 3 TITLE
    ======================================== */
@@ -979,9 +955,6 @@ mark{
   gap: 12px;
   margin-top: 10px;
 }
-@media (max-width: 900px){
-  .sim-controls{ grid-template-columns: 1fr; }
-}
 #cancelDays{ width: 100%; margin-top: 6px; }
 
 .sim-boxes{
@@ -989,9 +962,6 @@ mark{
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 12px;
-}
-@media (max-width: 900px){
-  .sim-boxes{ grid-template-columns: 1fr; }
 }
 .sim-box{
   padding: 14px;
@@ -1380,9 +1350,6 @@ code{
   gap: 12px;
   margin-top: 10px;
 }
-@media (max-width: 900px){
-  .subscore-grid{ grid-template-columns: 1fr; }
-}
 .subscore-card{
   padding: 14px;
   border-radius: 14px;
@@ -1465,4 +1432,277 @@ code{
 }
 ::-webkit-scrollbar-thumb:hover{
   background: rgba(99,102,241,0.35);
+}
+
+/* ========================================
+   MOBILE MENU
+   ======================================== */
+.mobile-menu-btn{ display: none; }
+
+.mobile-menu{
+  padding: 12px 28px 16px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+
+.mobile-menu-links{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-menu-links a{
+  display: block;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+  transition: background var(--transition-fast);
+}
+.mobile-menu-links a:hover{
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.mobile-menu-actions{
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.mobile-menu-actions .btn{
+  flex: 1;
+  justify-content: center;
+  padding: 12px;
+}
+
+.hide-mobile{ display: inline-flex; }
+
+/* ========================================
+   RESPONSIVE – TABLET (max-width: 900px)
+   ======================================== */
+@media (max-width: 900px){
+  .topnav-links{ display: none; }
+  .hide-mobile{ display: none !important; }
+  .mobile-menu-btn{ display: inline-flex; }
+
+  .topnav-inner{ padding: 10px 16px; }
+  .mobile-menu{ padding: 12px 16px 16px; }
+
+  .container{ padding: 16px; }
+
+  h1{ font-size: 22px; }
+
+  .pagehead{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 4px 0 16px;
+  }
+
+  .grid2{ grid-template-columns: 1fr; }
+  .grid3{ grid-template-columns: 1fr; }
+  .score-grid{ grid-template-columns: 1fr 1fr; gap: 10px; }
+  .plan-grid{ grid-template-columns: 1fr; }
+  .hero-grid{ grid-template-columns: 1fr; }
+  .pricing-grid{ grid-template-columns: 1fr; }
+  .subscore-grid{ grid-template-columns: 1fr; }
+  .sim-controls{ grid-template-columns: 1fr; }
+  .sim-boxes{ grid-template-columns: 1fr; }
+
+  .split{
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .card{ padding: 16px; }
+  .item{ padding: 14px; }
+  .redline-card{ padding: 14px; }
+
+  .billing-box{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .billing-right{
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .packs{
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .result-top{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .result-actions{
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .history{ max-height: none; }
+  .history-file{ -webkit-line-clamp: 2; }
+
+  .modal-panel{
+    width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    padding: 16px;
+  }
+
+  .credits-pill{ font-size: 11px; padding: 5px 8px; }
+}
+
+/* ========================================
+   RESPONSIVE – PHONE (max-width: 480px)
+   ======================================== */
+@media (max-width: 480px){
+  body{ font-size: 13px; }
+
+  .container{ padding: 12px; }
+  .topnav-inner{ padding: 8px 12px; }
+  .mobile-menu{ padding: 10px 12px 14px; }
+
+  h1{ font-size: 20px; }
+  h2{ font-size: 16px; }
+
+  .topnav-name{ font-size: 14px; }
+  .topnav-icon{ width: 32px; height: 32px; padding: 6px; }
+
+  .card{
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .score-grid{ grid-template-columns: 1fr; }
+  .score{ font-size: 28px; }
+
+  .item{
+    padding: 12px 12px 10px;
+    border-radius: 14px;
+  }
+  .item-title{ font-size: 14px; }
+  .item-head{ flex-wrap: wrap; gap: 6px; }
+
+  .badge{ font-size: 9px; padding: 3px 6px; }
+  .meta-pill{ font-size: 10px; padding: 3px 6px; }
+  .pill{ font-size: 10px; padding: 4px 8px; }
+
+  .btn{
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 10px;
+    min-height: 44px;
+  }
+  .btn.tiny{
+    padding: 8px 10px;
+    min-height: 40px;
+  }
+
+  .iconbtn{
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  .select, .input, input[type="file"]{
+    padding: 12px;
+    font-size: 14px;
+    border-radius: 12px;
+    min-height: 44px;
+  }
+
+  .textarea{
+    padding: 12px;
+    font-size: 14px;
+    min-height: 80px;
+  }
+
+  .redline-card{
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .warnbox{ padding: 10px 12px; font-size: 12px; }
+
+  .chips{ gap: 4px; }
+  .chip{
+    padding: 8px 10px;
+    font-size: 11px;
+    min-height: 36px;
+  }
+
+  .issue-actions{ gap: 6px; }
+  .issue-toggle{
+    padding: 8px 10px;
+    font-size: 11px;
+    min-height: 36px;
+  }
+
+  .driver-item{
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+  }
+  .driver-right{ align-self: flex-start; }
+
+  .billing-box{ padding: 12px; gap: 10px; }
+
+  .row{
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .neg-head{ flex-direction: column; }
+
+  .modal-panel{
+    width: calc(100% - 12px);
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .toast{
+    top: 8px;
+    max-width: calc(100% - 16px);
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  /* Dosya yükleme alanı */
+  .fieldhint{ font-size: 11px; }
+  .small{ font-size: 11px; }
+
+  /* Tablo benzeri grid'ler sığdır */
+  .correctness-list{ margin-left: 12px; }
+  .bullets{ margin-left: 14px; }
+}
+
+/* ========================================
+   TOUCH – dokunmatik hedef minimum boyut
+   ======================================== */
+@media (pointer: coarse){
+  .btn{ min-height: 44px; }
+  .btn.tiny{ min-height: 40px; }
+  .iconbtn{ min-width: 44px; min-height: 44px; }
+  .chip{ min-height: 40px; }
+  .issue-toggle{ min-height: 40px; }
+  .select, .input, input[type="file"]{ min-height: 48px; }
+
+  /* Hover animasyonları dokunmatikta kaldır */
+  .item:hover,
+  .score-box:hover,
+  .redline-card:hover,
+  .subscore-card:hover,
+  .hero-item:hover,
+  .driver-item:hover,
+  .history-item:hover{
+    transform: none;
+  }
 }

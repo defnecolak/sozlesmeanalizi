@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/public/styles.css?v=41" />
+<link rel="stylesheet" href="/public/styles.css?v=42" />
 <script src="/public/theme.js?v=40" defer></script>
 </head>
 <body>
@@ -52,8 +52,21 @@
           <div class="credits-pill hidden" id="creditsPill" title="Kalan analiz kredin">Kredi: <span id="creditsCount">—</span></div>
         <% } %>
         <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir" title="Koyu/Açık tema"></button>
-        <button class="btn tiny" id="btnDemo" type="button">Demo</button>
-        <button class="btn tiny" id="btnReset" type="button">Sıfırla</button>
+        <button class="btn tiny hide-mobile" id="btnDemo" type="button">Demo</button>
+        <button class="btn tiny hide-mobile" id="btnReset" type="button">Sıfırla</button>
+        <button class="iconbtn mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Menü" title="Menü">☰</button>
+      </div>
+    </div>
+    <!-- Mobil menü paneli -->
+    <div class="mobile-menu hidden" id="mobileMenu">
+      <nav class="mobile-menu-links">
+        <a href="/uygulama">Uygulama</a>
+        <a href="/fiyatlandirma">Fiyatlandırma</a>
+        <a href="/sss">SSS</a>
+      </nav>
+      <div class="mobile-menu-actions">
+        <button class="btn tiny" id="btnDemoMobile" type="button">Demo</button>
+        <button class="btn tiny" id="btnResetMobile" type="button">Sıfırla</button>
       </div>
     </div>
   </header>

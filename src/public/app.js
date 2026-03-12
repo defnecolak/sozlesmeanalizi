@@ -35,6 +35,20 @@ const btnRestore = $("btnRestore");
 const btnAnalyze = $("btnAnalyze");
 const btnReset = $("btnReset");
 const btnDemo = $("btnDemo");
+
+// --- Mobil menü toggle ---
+const mobileMenuBtn = $("mobileMenuBtn");
+const mobileMenu = $("mobileMenu");
+const btnDemoMobile = $("btnDemoMobile");
+const btnResetMobile = $("btnResetMobile");
+if (mobileMenuBtn && mobileMenu) {
+  mobileMenuBtn.addEventListener("click", () => {
+    mobileMenu.classList.toggle("hidden");
+    mobileMenuBtn.textContent = mobileMenu.classList.contains("hidden") ? "☰" : "✕";
+  });
+}
+if (btnDemoMobile) btnDemoMobile.addEventListener("click", () => { btnDemo?.click(); mobileMenu?.classList.add("hidden"); mobileMenuBtn && (mobileMenuBtn.textContent = "☰"); });
+if (btnResetMobile) btnResetMobile.addEventListener("click", () => { btnReset?.click(); mobileMenu?.classList.add("hidden"); mobileMenuBtn && (mobileMenuBtn.textContent = "☰"); });
 const resultCard = $("resultCard");
 const btnPdf = $("btnPdf");
 const premiumKeyInput = $("premiumKey");
