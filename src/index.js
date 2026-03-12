@@ -239,9 +239,9 @@ app.use((req, res, next) => {
     "frame-ancestors 'none'",
     `form-action 'self' ${iyzicoHosts.join(" ")}`.trim(),
     `img-src 'self' data: ${iyzicoHosts.join(" ")}`.trim(),
-    "font-src 'self' data:",
+    "font-src 'self' data: https://fonts.gstatic.com",
     // inline style attribute kullanıyoruz (EJS/JS). Güvenli tarafta kalmak için şimdilik izinli.
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     // script nonce ile: XSS'e karşı en güçlü savunmalardan biri
     `script-src 'self' 'nonce-${nonce}' ${iyzicoHosts.join(" ")}`.trim(),
     // fetch/XHR/websocket
