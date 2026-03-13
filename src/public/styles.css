@@ -1391,45 +1391,49 @@ code{
    PAYMENT LOGOS
    ======================================== */
 .payment-logos{
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 10px 0;
-  padding: 10px 14px;
-  border-radius: 10px;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-radius: 8px;
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
 }
 
 .pay-logo{
   flex-shrink: 0;
+  display: block;
 }
 
 .pay-logo-iyzico{
-  height: 20px;
-  width: auto;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1E64FF;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .pay-logo-visa{
-  height: 16px;
-  width: auto;
+  width: 36px;
+  height: 12px;
 }
 
 .pay-logo-mc{
-  height: 22px;
-  width: auto;
+  width: 26px;
+  height: 16px;
 }
 
 .pay-logo-sep{
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .pay-logo-divider{
   width: 1px;
-  height: 18px;
+  height: 14px;
   background: var(--border);
   flex-shrink: 0;
 }
@@ -1734,6 +1738,17 @@ code{
   /* Tablo benzeri grid'ler sığdır */
   .correctness-list{ margin-left: 12px; }
   .bullets{ margin-left: 14px; }
+
+  /* Ödeme logoları küçült */
+  .payment-logos{
+    gap: 6px;
+    padding: 5px 8px;
+  }
+  .pay-logo-iyzico{ font-size: 11px; }
+  .pay-logo-visa{ width: 30px; height: 10px; }
+  .pay-logo-mc{ width: 22px; height: 14px; }
+  .pay-logo-sep{ font-size: 10px; }
+  .pay-logo-divider{ height: 12px; }
 }
 
 /* ========================================
