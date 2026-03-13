@@ -79,9 +79,16 @@ function hasAny(text, needles = []) {
   return needles.some((n) => s.includes(norm(n)));
 }
 
+function _ncSource(keywordRe) {
+  // Keyword regex'in .source'undaki yakalama gruplarını (?:...) ile değiştir
+  // böylece ana regex'te m[1] doğru yakalama grubunu gösterir.
+  return keywordRe.source.replace(/\((?!\?)/g, '(?:');
+}
+
 function extractFirstPercentNear(text, keywordRe) {
   const t = String(text || '');
-  const re = new RegExp(`(?:${keywordRe.source})[^%\n\r]{0,80}%\s*(\\d+(?:[.,]\\d+)?)`, keywordRe.flags.includes('i') ? 'i' : '');
+  const kw = _ncSource(keywordRe);
+  const re = new RegExp(`(?:${kw})[^%\\n\\r]{0,80}%\\s*(\\d+(?:[.,]\\d+)?)`, keywordRe.flags.includes('i') ? 'i' : '');
   const m = t.match(re);
   if (!m) return null;
   const n = Number(String(m[1]).replace(',', '.'));
@@ -90,7 +97,8 @@ function extractFirstPercentNear(text, keywordRe) {
 
 function extractFirstDaysNear(text, keywordRe) {
   const t = norm(text);
-  const re = new RegExp(`(?:${keywordRe.source})[^\n\r\d]{0,80}(\\d{1,3})\\s*gun`, 'i');
+  const kw = _ncSource(keywordRe);
+  const re = new RegExp(`(?:${kw})[^\\n\\r\\d]{0,80}(\\d{1,3})\\s*gun`, 'i');
   const m = t.match(re);
   if (!m) return null;
   const n = Number(m[1]);
@@ -99,7 +107,8 @@ function extractFirstDaysNear(text, keywordRe) {
 
 function extractFirstMonthsNear(text, keywordRe) {
   const t = norm(text);
-  const re = new RegExp(`(?:${keywordRe.source})[^\n\r\d]{0,80}(\\d{1,3})\\s*ay`, 'i');
+  const kw = _ncSource(keywordRe);
+  const re = new RegExp(`(?:${kw})[^\\n\\r\\d]{0,80}(\\d{1,3})\\s*ay`, 'i');
   const m = t.match(re);
   if (!m) return null;
   const n = Number(m[1]);
@@ -359,6 +368,9 @@ function buildPackSmartReview(packKey, ctx) {
         const v = verdictForRange(lateInterest, 0.5, 2.0);
         push(checks, 'Gecikme faizi (aylık)', fmtPercent(lateInterest), v.verdict, 'Özellikle küçük alacaklarda faiz + tahsil masrafı kombinasyonu ağırlaşabilir.', v.tone);
       }
+      if (durationMonths != null) {
+        push(checks, 'Proje / hizmet süresi', `${durationMonths} ay`, 'bilgi', 'Süre ile ödeme ve teslim takviminin uyumlu olması gerekir.', 'muted');
+      }
       if (pack === 'influencer') {
         const exMonths = extractFirstMonthsNear(text, /(rekabet|munhasir|münhasır|exclusive|munsahır)/i);
         if (exMonths != null) {
@@ -380,6 +392,7 @@ function buildPackSmartReview(packKey, ctx) {
         const v = verdictForRange(returnDays, 7, 14);
         push(checks, 'İade / itiraz süresi', `${returnDays} gün`, v.verdict, '3 gün gibi kısa pencereler kullanıcı tarafı için sert olabilir.', v.tone);
       }
+      push(checks, 'Sorumluluk üst sınırı', hasCap ? 'var' : 'belirsiz', hasCap ? 'makul' : 'kontrol et', 'Cap/azami tutar yoksa ayıplı ürün talebi bedelinin çok üstüne çıkabilir.', hasCap ? 'ok' : 'warn');
       break;
     }
 
@@ -497,20 +510,44 @@ function buildPackSmartReview(packKey, ctx) {
         push(checks, 'Faiz / gecikme oranı', fmtPercent(lateInterest), v.verdict, 'Faiz + tahsil/masraf kombinasyonunu ayrıca kontrol etmek gerekir.', v.tone);
       }
       push(checks, 'Sorumluluk üst sınırı', hasCap ? 'var' : 'belirsiz', hasCap ? 'makul' : 'kontrol et', 'Cap/azami tutar hükmü yoksa küçük sözleşme büyük tazminat kapısına dönebilir.', hasCap ? 'ok' : 'warn');
+      if (durationMonths != null) {
+        push(checks, 'Sözleşme süresi', `${durationMonths} ay`, 'bilgi', 'Süreyi fesih koşulları ve otomatik yenileme ile birlikte değerlendirmek gerekir.', 'muted');
+      }
+      if (noticeDays != null) {
+        const v = verdictForRange(noticeDays, 7, 30);
+        push(checks, 'Bildirim / ihbar süresi', `${noticeDays} gün`, v.verdict, 'Kısa bildirim süreleri ani yükümlülük doğurabilir; uzun süreler esneklik sağlar.', v.tone);
+      }
+      const hasAutoRenew = hasAny(text, ['otomatik yenileme', 'otomatik uzatma', 'kendiliğinden yenilenir', 'kendiliğinden uzar']);
+      push(checks, 'Otomatik yenileme', hasAutoRenew ? 'var' : 'görünmüyor', hasAutoRenew ? 'kontrol et' : 'bilgi', hasAutoRenew ? 'Otomatik yenileme varsa iptal/çıkış penceresi ve fiyat artışı koşulları mutlaka netleştirilmeli.' : 'Otomatik yenileme görünmüyor; süre bitiminde tarafların durumu net olmalı.', hasAutoRenew ? 'warn' : 'muted');
+      const hasDispute = hasAny(text, ['uyuşmazlık', 'arabuluculuk', 'tahkim', 'mahkeme', 'icra']);
+      push(checks, 'Uyuşmazlık çözüm yolu', hasDispute ? 'belirtilmiş' : 'belirsiz', hasDispute ? 'bilgi' : 'kontrol et', 'Yetkili mahkeme veya tahkim/arabuluculuk klozu yoksa uyuşmazlıkta belirsizlik yaşanabilir.', hasDispute ? 'muted' : 'warn');
       break;
     }
   }
 
   if (!checks.length) return buildGenericChecklist(pack);
 
+  // Dengeleyici hükümler — tüm sözleşme türlerinde göster
   if (excludesIndirect) {
     push(checks, 'Dolaylı zarar istisnası', 'var', 'dengeleyici', 'Kar kaybı / dolaylı zarar hariç tutulmuşsa sorumluluk dili biraz yumuşamış olabilir.', 'ok');
   }
-  if (hasExit && (pack === 'saas' || pack === 'abonelik' || pack === 'hizmet' || pack === 'influencer' || pack === 'etkinlik')) {
+  if (hasExit) {
     push(checks, 'Çıkış / fesih hakkı', 'var', 'dengeleyici', 'Ceza veya bildirimle çıkış imkanı olması tek taraflı sıkışmayı azaltır.', 'ok');
   }
-  if (hasNotice && (pack === 'saas' || pack === 'abonelik' || pack === 'hizmet' || pack === 'is')) {
+  if (hasNotice) {
     push(checks, 'Önceden bildirim', `${noticeDays} gün`, 'dengeleyici', 'Ön bildirim varsa fiyat/yenileme/fesih sürprizi bir miktar azalır.', 'ok');
+  }
+
+  // Akıllı kontrol sayısı azsa, genel kontrol listesinden tamamla
+  const smartCheckCount = checks.length;
+  if (smartCheckCount < 3) {
+    const generic = buildGenericChecklist(pack);
+    const existing = new Set(checks.map((c) => c.label));
+    for (const g of generic.checks) {
+      if (!existing.has(g.label) && checks.length < 6) {
+        checks.push(g);
+      }
+    }
   }
 
   const status = statusFromChecks(checks);
