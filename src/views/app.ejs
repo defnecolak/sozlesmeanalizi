@@ -27,11 +27,8 @@
     }catch(e){}
   })();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/public/styles.css?v=43" />
-<script src="/public/theme.js?v=43" defer></script>
+<link rel="stylesheet" href="/public/styles.css?v=36" />
+<script src="/public/theme.js?v=36" defer></script>
 </head>
 <body>
   <header class="topnav">
@@ -52,21 +49,8 @@
           <div class="credits-pill hidden" id="creditsPill" title="Kalan analiz kredin">Kredi: <span id="creditsCount">—</span></div>
         <% } %>
         <button class="iconbtn" id="themeToggle" type="button" aria-label="Tema değiştir" title="Koyu/Açık tema"></button>
-        <button class="btn tiny hide-mobile" id="btnDemo" type="button">Demo</button>
-        <button class="btn tiny hide-mobile" id="btnReset" type="button">Sıfırla</button>
-        <button class="iconbtn mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Menü" title="Menü">☰</button>
-      </div>
-    </div>
-    <!-- Mobil menü paneli -->
-    <div class="mobile-menu hidden" id="mobileMenu">
-      <nav class="mobile-menu-links">
-        <a href="/uygulama">Uygulama</a>
-        <a href="/fiyatlandirma">Fiyatlandırma</a>
-        <a href="/sss">SSS</a>
-      </nav>
-      <div class="mobile-menu-actions">
-        <button class="btn tiny" id="btnDemoMobile" type="button">Demo</button>
-        <button class="btn tiny" id="btnResetMobile" type="button">Sıfırla</button>
+        <button class="btn tiny" id="btnDemo" type="button">Demo</button>
+        <button class="btn tiny" id="btnReset" type="button">Sıfırla</button>
       </div>
     </div>
   </header>
@@ -139,13 +123,6 @@
         <% }) %>
       </div>
       <% if (paymentsProvider === "iyzico") { %>
-      <div class="payment-logos">
-        <span class="pay-logo-iyzico">iyzico</span>
-        <span class="pay-logo-sep">ile öde</span>
-        <span class="pay-logo-divider"></span>
-        <svg class="pay-logo pay-logo-visa" viewBox="0 0 58 20" xmlns="http://www.w3.org/2000/svg"><path d="M23.6 1.3L15.9 18.7h-5.4L6.7 5c-.2-.9-.4-1.2-1.1-1.6C4.4 2.7 2.5 2.2.8 1.8l.1-.5h8.8c1.1 0 2.1.7 2.3 2l2.1 11 5.4-13h4.1zm18.6 11.6c0-4.8-6.6-5-6.6-7.2 0-.6.6-1.3 1.9-1.5.7-.1 2.4-.1 4.4.8l.8-3.4C41.7 1.3 40.3.9 38.6.9c-3.9 0-6.6 2.1-6.7 5 0 2.2 2 3.4 3.5 4.2 1.5.8 2.1 1.2 2.1 1.9 0 1-1.2 1.5-2.3 1.5-2.3 0-3.6-.6-4.6-1.1l-.8 3.5c1.1.5 3 .9 5 .9 4.1 0 6.8-2.1 7.4-3.9zm11.7 5.8h3.6L54.3 1.3h-4c-1 0-1.8.5-2.1 1.4l-6 16.1h4.1l.8-2.3h5.1l.7 2.3zM48.3 13.4l2.1-6 1.3 6h-3.4zM30.4 1.3L27.2 18.7h-4l3.2-17.4h4z" fill="#1A1F71"/></svg>
-        <svg class="pay-logo pay-logo-mc" viewBox="0 0 40 25" xmlns="http://www.w3.org/2000/svg"><circle cx="15" cy="12.5" r="9.5" fill="#EB001B"/><circle cx="25" cy="12.5" r="9.5" fill="#F79E1B"/><path d="M20 5.3a9.5 9.5 0 0 1 3.5 7.2 9.5 9.5 0 0 1-3.5 7.2 9.5 9.5 0 0 1-3.5-7.2A9.5 9.5 0 0 1 20 5.3z" fill="#FF5F00"/></svg>
-      </div>
       <div class="muted small">Ödeme iyzico üzerinden yapılır. Ödeme tamamlandıktan sonra kredin otomatik yüklenir (bazı durumlarda 5-10 sn sürebilir).</div>
       <div class="muted small">Not: Ödeme için e-posta istenebilir (hesap açmana gerek yok).</div>
     <% } else { %>
@@ -301,91 +278,6 @@
         <div class="redline-grid" id="whatIfList"></div>
       </section>
 
-      <!-- İçerik İyileştirmeleri -->
-      <section class="correctness-box hidden" id="executiveSummaryBox">
-        <div class="correctness-head">
-          <h3>Yönetici Özeti</h3>
-          <span class="pill" id="execStatusBadge">—</span>
-        </div>
-        <div id="executiveSummaryContent"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="ratioAnalysisBox">
-        <div class="correctness-head">
-          <h3>Oran Analizi</h3>
-        </div>
-        <div class="muted">Cezai şart, depozito, faiz gibi değerlerin sektör ortalamalarıyla karşılaştırması.</div>
-        <div class="redline-grid" id="ratioAnalysisList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="sectorRedFlagsBox">
-        <div class="correctness-head">
-          <h3>Sektöre Özel Eksikler</h3>
-        </div>
-        <div class="muted">Seçtiğin sözleşme türüne özel, eksik veya belirsiz kalan alanlar.</div>
-        <div class="redline-grid" id="sectorRedFlagsList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="comparativeStatsBox">
-        <div class="correctness-head">
-          <h3>Karşılaştırmalı Analiz</h3>
-        </div>
-        <div id="comparativeStatsContent"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="rewriteSuggestionsBox">
-        <div class="correctness-head">
-          <h3>Somut Yeniden Yazım Önerileri</h3>
-        </div>
-        <div class="muted">Her risk maddesi için "mevcut (sorunlu)" ve "önerilen (dengeli)" madde karşılaştırması.</div>
-        <div class="redline-grid" id="rewriteSuggestionsList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="powerBalanceBox">
-        <div class="correctness-head">
-          <h3>Güç Dengesi Analizi</h3>
-          <span class="pill" id="powerBalanceBadge">—</span>
-        </div>
-        <div id="powerBalanceContent"></div>
-        <div class="redline-grid" id="powerBalanceList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="negotiationPriorityBox">
-        <div class="correctness-head">
-          <h3>Müzakere Öncelik Sıralaması</h3>
-        </div>
-        <div class="muted">Hangi maddeyi önce müzakere etmen gerektiğini, etki ve kabul olasılığına göre sıralar.</div>
-        <div id="negotiationPriorityContent"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="missingClausesBox">
-        <div class="correctness-head">
-          <h3>Eksik Madde Tespiti</h3>
-          <span class="pill" id="missingClausesBadge">—</span>
-        </div>
-        <div id="missingClausesContent"></div>
-        <div class="redline-grid" id="missingClausesList"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="timelineMapBox">
-        <div class="correctness-head">
-          <h3>Süre Haritası</h3>
-        </div>
-        <div class="muted">Sözleşmedeki tüm süre ve tarihleri tek bakışta gör.</div>
-        <div id="timelineMapContent"></div>
-      </section>
-
-      <section class="correctness-box hidden" id="riskSummaryCardBox">
-        <div class="correctness-head">
-          <h3>Risk Özet Kartı</h3>
-        </div>
-        <div class="muted">Avukatına veya karşı tarafa gönderebileceğin tek sayfalık özet.</div>
-        <div id="riskSummaryCardContent"></div>
-        <div style="margin-top:12px;text-align:center">
-          <button type="button" class="btn btn-secondary" id="btnCopyRiskCard" style="font-size:0.85em">Özeti Kopyala</button>
-        </div>
-      </section>
-
       <section class="correctness-box hidden" id="subscoresBox">
         <div class="correctness-head">
           <h3>Alt Skorlar</h3>
@@ -500,13 +392,6 @@
         <h3>Ödeme</h3>
         <button class="btn" id="btnPayClose">Kapat</button>
       </div>
-      <div class="payment-logos" style="margin-top:10px">
-        <span class="pay-logo-iyzico">iyzico</span>
-        <span class="pay-logo-sep">ile güvenli ödeme</span>
-        <span class="pay-logo-divider"></span>
-        <svg class="pay-logo pay-logo-visa" viewBox="0 0 58 20" xmlns="http://www.w3.org/2000/svg"><path d="M23.6 1.3L15.9 18.7h-5.4L6.7 5c-.2-.9-.4-1.2-1.1-1.6C4.4 2.7 2.5 2.2.8 1.8l.1-.5h8.8c1.1 0 2.1.7 2.3 2l2.1 11 5.4-13h4.1zm18.6 11.6c0-4.8-6.6-5-6.6-7.2 0-.6.6-1.3 1.9-1.5.7-.1 2.4-.1 4.4.8l.8-3.4C41.7 1.3 40.3.9 38.6.9c-3.9 0-6.6 2.1-6.7 5 0 2.2 2 3.4 3.5 4.2 1.5.8 2.1 1.2 2.1 1.9 0 1-1.2 1.5-2.3 1.5-2.3 0-3.6-.6-4.6-1.1l-.8 3.5c1.1.5 3 .9 5 .9 4.1 0 6.8-2.1 7.4-3.9zm11.7 5.8h3.6L54.3 1.3h-4c-1 0-1.8.5-2.1 1.4l-6 16.1h4.1l.8-2.3h5.1l.7 2.3zM48.3 13.4l2.1-6 1.3 6h-3.4zM30.4 1.3L27.2 18.7h-4l3.2-17.4h4z" fill="#1A1F71"/></svg>
-        <svg class="pay-logo pay-logo-mc" viewBox="0 0 40 25" xmlns="http://www.w3.org/2000/svg"><circle cx="15" cy="12.5" r="9.5" fill="#EB001B"/><circle cx="25" cy="12.5" r="9.5" fill="#F79E1B"/><path d="M20 5.3a9.5 9.5 0 0 1 3.5 7.2 9.5 9.5 0 0 1-3.5 7.2 9.5 9.5 0 0 1-3.5-7.2A9.5 9.5 0 0 1 20 5.3z" fill="#FF5F00"/></svg>
-      </div>
       <div class="muted small" id="payPackLine">—</div>
 
       <div class="grid2" style="margin-top:12px">
@@ -537,10 +422,10 @@
     window.__CHECKOUT_URL__ = "<%= checkoutUrl %>";
     window.__PAYMENTS_PROVIDER__ = "<%= paymentsProvider %>";
     window.__CSP_NONCE__ = "<%= cspNonce %>";
-    window.__CHECKOUT_PACKS__ = <%- safeJson(checkoutPacks || []) %>;
-    window.APP_META = <%- safeJson(appMeta || {}) %>;
+    window.__CHECKOUT_PACKS__ = <%- JSON.stringify(checkoutPacks || []) %>;
+    window.APP_META = <%- JSON.stringify(appMeta || {}) %>;
   </script>
   <script src="/public/negotiation-copy.js?v=34"></script>
-  <script src="/public/app.js?v=43"></script>
+  <script src="/public/app.js?v=36"></script>
 </body>
 </html>
